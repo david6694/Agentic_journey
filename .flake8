@@ -1,0 +1,4 @@
+[flake8]
+exclude = .venv
+# models.py is copied verbatim from the moulinette (models_public.py)
+per-file-ignores = smith/models.py:E501
