@@ -7,9 +7,9 @@ import subprocess
 from pathlib import Path
 from typing import List
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
-mcp = MCPServer("swebench-tools")
+mcp = FastMCP("swebench-tools")
 
 IGNORED_DIRS = {".git", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache"}
 MAX_OUTPUT_CHARS = 20000

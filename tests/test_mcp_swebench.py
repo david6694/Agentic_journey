@@ -1,6 +1,7 @@
 """Tests for mcp_tools_swebench.py."""
 import asyncio
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -88,7 +89,7 @@ def test_swebench_tools_direct(tmp_path: Path, monkeypatch: object) -> None:
     assert "+    return a + b" in patch
 
     # run_tests
-    os.environ["EVAL_SCRIPT"] = f"{sys.executable} -m pytest -q"
+    os.environ["EVAL_SCRIPT"] = f"{shlex.quote(sys.executable)} -m pytest -q"
     test_out = swe.run_tests()
     assert "exit_code: 0" in test_out
 

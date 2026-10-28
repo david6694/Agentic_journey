@@ -1,6 +1,7 @@
 """Tests for smith.llm (KeyRotator and LLMClient)."""
 import io
 import json
+import time
 from typing import Any, Dict, List
 import urllib.error
 
@@ -29,7 +30,7 @@ def test_llm_client_rotation_and_metrics(
     used_keys: List[str] = []
 
     def fake_post(
-        self: LLMClient, payload: Dict[str, Any], api_key: str
+        self: LLMClient, payload: Dict[str, Any], api_key: str, timeout: float
     ) -> Dict[str, Any]:
         used_keys.append(api_key)
         if api_key == "bad_key":
@@ -83,7 +84,7 @@ def test_llm_client_exhausted_retries(
     monkeypatch.setattr(
         LLMClient,
         "_post_chat",
-        lambda self, p, k: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda self, p, k, t: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     client = LLMClient(
@@ -94,3 +95,30 @@ def test_llm_client_exhausted_retries(
     with pytest.raises(LLMError, match="after 2 retries"):
         client.generate([{"role": "user", "content": "hi"}], step=1)
     assert json.loads(client.rotator.keys[0].replace("k1", '"k1"')) == "k1"
+
+
+def test_llm_client_respects_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "k1")
+    monkeypatch.setattr(
+        LLMClient, "_sleep_backoff", lambda self, a: time.sleep(0.2)
+    )
+    timeouts: List[float] = []
+
+    def slow_post(
+        self: LLMClient, payload: Dict[str, Any], api_key: str, timeout: float
+    ) -> Dict[str, Any]:
+        timeouts.append(timeout)
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(LLMClient, "_post_chat", slow_post)
+    client = LLMClient(
+        model_name="llama-3.3-70b-versatile",
+        provider_url="https://api.groq.com/openai/v1",
+        max_retries=10,
+    )
+    with pytest.raises(LLMError):
+        client.generate([{"role": "user", "content": "hi"}], timeout=0.5)
+    assert len(timeouts) <= 3
+    assert all(0 < t <= 0.5 for t in timeouts)

@@ -147,7 +147,7 @@ class LLMClient:
         return max(1, len(text) // 4) if text else 0
 
     def _post_chat(
-        self, payload: Dict[str, Any], api_key: str
+        self, payload: Dict[str, Any], api_key: str, timeout: float
     ) -> Dict[str, Any]:
         endpoint = f"{self.api_url}/chat/completions"
         body = json.dumps(payload).encode("utf-8")
@@ -159,9 +159,7 @@ class LLMClient:
         req = urllib.request.Request(
             endpoint, data=body, headers=headers, method="POST"
         )
-        with urllib.request.urlopen(
-            req, timeout=self.timeout_seconds
-        ) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             parsed: Dict[str, Any] = json.loads(raw)
             return parsed
@@ -173,11 +171,13 @@ class LLMClient:
         stop: Optional[List[str]] = None,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        timeout: Optional[float] = None,
     ) -> StepMetrics:
         """Call the LLM chat completion API and return a populated StepMetrics.
 
         The caller (agent loop) only needs to fill in `sandbox_input` and
         `sandbox_output` after executing the extracted code.
+        `timeout` caps the whole call in seconds, retries included.
         """
         payload: Dict[str, Any] = {
             "model": self.model_name,
@@ -195,11 +195,19 @@ class LLMClient:
         retries = 0
         last_error: Optional[Exception] = None
         start_time = time.perf_counter()
+        deadline = None if timeout is None else start_time + timeout
 
         for attempt in range(self.max_retries + 1):
+            request_timeout = self.timeout_seconds
+            if deadline is not None:
+                request_timeout = min(
+                    request_timeout, deadline - time.perf_counter()
+                )
+                if request_timeout <= 0:
+                    break
             api_key = self.rotator.current()
             try:
-                data = self._post_chat(payload, api_key)
+                data = self._post_chat(payload, api_key, request_timeout)
                 elapsed_ms = round(
                     (time.perf_counter() - start_time) * 1000.0, 2
                 )

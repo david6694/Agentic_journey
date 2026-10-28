@@ -4,9 +4,9 @@ import subprocess
 import sys
 from typing import List
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
-mcp = MCPServer("mbpp-tools")
+mcp = FastMCP("mbpp-tools")
 
 
 @mcp.tool()
