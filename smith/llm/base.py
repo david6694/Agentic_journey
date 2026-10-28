@@ -6,7 +6,7 @@ implements it, tests use a scripted fake.
 
 from typing import Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LLMResponse(BaseModel):
@@ -16,7 +16,10 @@ class LLMResponse(BaseModel):
     input_tokens: int
     output_tokens: int
     request_time_ms: float
-    retries: int = 0
+    retries: int = Field(
+        default=0,
+        description="Number of LLM API retries before getting a successful "
+                    "response (0 = first attempt succeeded)")
     api_url: str = ""
     model_name: str = ""
 
