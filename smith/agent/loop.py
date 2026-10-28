@@ -5,8 +5,8 @@ import time
 from pydantic import BaseModel
 
 from smith.agent.extraction import extract_code
-from smith.llm.base import LLMClient
-from smith.models import SolutionOutput, StepMetrics
+from smith.llm.base import ChatModel
+from smith.models import SolutionOutput
 from smith.sandbox.sandbox import Sandbox, SandboxError
 
 STOP_SEQUENCES = ["<end_code>", "Observation:"]
@@ -73,7 +73,7 @@ def _out_of_budget(
 
 
 def run_agent(
-    llm: LLMClient,
+    llm: ChatModel,
     sandbox: Sandbox,
     system_prompt: str,
     task_prompt: str,
@@ -114,14 +114,15 @@ def run_agent(
         if output.error:
             break
         try:
-            response = llm.complete(
-                messages, STOP_SEQUENCES,
-                limits.max_output_tokens - output.total_output_tokens,
-                limits.max_seconds - elapsed)
+            metrics = llm.generate(
+                messages, step=step, stop=STOP_SEQUENCES,
+                max_tokens=limits.max_output_tokens
+                - output.total_output_tokens,
+                timeout=limits.max_seconds - elapsed)
         except Exception as exc:
             output.error = f"LLM request failed: {type(exc).__name__}: {exc}"
             break
-        code, note = extract_code(response.text)
+        code, note = extract_code(metrics.llm_output)
         try:
             result = sandbox.execute(code) if code else None
             if result and result.worker_restarted:
@@ -132,17 +133,13 @@ def run_agent(
         observation = _shorten(
             result.to_observation(), limits.max_observation_chars
         ) if result else ""
-        output.steps.append(StepMetrics(
-            step=step, input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            request_time_ms=response.request_time_ms,
-            api_url=response.api_url, model_name=response.model_name,
-            llm_output=response.text, sandbox_input=code or "",
-            sandbox_output=observation, retries=response.retries))
+        metrics.sandbox_input = code or ""
+        metrics.sandbox_output = observation
+        output.steps.append(metrics)
         output.iterations = step
-        output.total_requests += 1 + response.retries
-        output.total_input_tokens += response.input_tokens
-        output.total_output_tokens += response.output_tokens
+        output.total_requests += 1 + metrics.retries
+        output.total_input_tokens += metrics.input_tokens
+        output.total_output_tokens += metrics.output_tokens
         if result and result.final_answer_called:
             output.success = True
             output.solution = result.final_answer or ""
@@ -150,7 +147,7 @@ def run_agent(
         if output.error:
             break
         feedback = "\n".join(p for p in (note, observation) if p)
-        messages += [{"role": "assistant", "content": response.text},
+        messages += [{"role": "assistant", "content": metrics.llm_output},
                      {"role": "user", "content": f"Observation:\n{feedback}"}]
     else:
         output.error = (f"no final_answer within {limits.max_iterations} "

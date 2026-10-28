@@ -5,8 +5,7 @@ from collections.abc import Iterator
 import pytest
 
 from smith.agent.loop import AgentLimits, run_agent
-from smith.llm.base import LLMResponse
-from smith.models import SolutionOutput
+from smith.models import SolutionOutput, StepMetrics
 from smith.sandbox.config import SmithSandboxConfig
 from smith.sandbox.results import ExecutionResult
 from smith.sandbox.sandbox import Sandbox, SandboxError
@@ -22,17 +21,19 @@ class FakeLLM:
         self.answers = answers
         self.calls: list[list[dict[str, str]]] = []
 
-    def complete(self, messages: list[dict[str, str]], stop: list[str],
-                 max_tokens: int, timeout: float) -> LLMResponse:
+    def generate(self, messages: list[dict[str, str]], *, step: int,
+                 stop: list[str] | None, max_tokens: int | None,
+                 timeout: float | None) -> StepMetrics:
+        assert timeout is not None
         assert 0 < timeout <= AgentLimits.mbpp().max_seconds
         self.calls.append(list(messages))
         if not self.answers:
             raise RuntimeError("provider down")
         size = sum(len(m["content"]) for m in messages)
-        return LLMResponse(
-            text=self.answers.pop(0), input_tokens=size // 4,
-            output_tokens=50, request_time_ms=5.0, retries=1,
-            api_url="https://fake/v1", model_name="fake-model")
+        return StepMetrics(
+            step=step, llm_output=self.answers.pop(0),
+            input_tokens=size // 4, output_tokens=50, request_time_ms=5.0,
+            retries=1, api_url="https://fake/v1", model_name="fake-model")
 
 
 @pytest.fixture

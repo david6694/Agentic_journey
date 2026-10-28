@@ -52,7 +52,7 @@ class ToolSpec(BaseModel):
 
 
 # Passed to stdio MCP servers on top of HOME, PATH, USER...
-SERVER_ENV_VARS = ("TESTBED_PATH", "DOCKER_HOST")
+SERVER_ENV_VARS = ("TESTBED_PATH", "EVAL_SCRIPT", "DOCKER_HOST")
 
 JSON_TYPES = {
     "string": "str", "integer": "int", "number": "float",
