@@ -1,0 +1,56 @@
+{
+  "default_provider": "openrouter",
+  "default_model": "qwen/qwen3-235b-a22b:free",
+  "providers": {
+    "openrouter": {
+      "api_url": "https://openrouter.ai/api/v1",
+      "env_var": "OPENROUTER_API_KEY",
+      "models": [
+        "qwen/qwen3-235b-a22b:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-exp:free"
+      ]
+    },
+    "groq": {
+      "api_url": "https://api.groq.com/openai/v1",
+      "env_var": "GROQ_API_KEY",
+      "models": [
+        "llama-3.3-70b-versatile",
+        "qwen-qwq-32b",
+        "gemma2-9b-it"
+      ]
+    },
+    "cerebras": {
+      "api_url": "https://api.cerebras.ai/v1",
+      "env_var": "CEREBRAS_API_KEY",
+      "models": [
+        "llama-3.3-70b",
+        "qwen-3-32b"
+      ]
+    },
+    "mistral": {
+      "api_url": "https://api.mistral.ai/v1",
+      "env_var": "MISTRAL_API_KEY",
+      "models": [
+        "codestral-latest",
+        "mistral-small-latest"
+      ]
+    },
+    "gemini": {
+      "api_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "env_var": "GEMINI_API_KEY",
+      "models": [
+        "gemini-2.0-flash",
+        "gemini-2.5-flash"
+      ]
+    },
+    "together": {
+      "api_url": "https://api.together.xyz/v1",
+      "env_var": "TOGETHER_API_KEY",
+      "models": [
+        "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+      ]
+    }
+  }
+}
