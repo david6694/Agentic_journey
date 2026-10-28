@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from smith.agent.extraction import extract_code
 from smith.llm.base import LLMClient
 from smith.models import SolutionOutput, StepMetrics
-from smith.sandbox.sandbox import Sandbox
+from smith.sandbox.sandbox import Sandbox, SandboxError
 
 STOP_SEQUENCES = ["<end_code>", "Observation:"]
 # Code tokenizes at ~3-4 chars per token; 3 keeps the estimate pessimistic.
@@ -46,6 +46,14 @@ def _shorten(text: str, limit: int) -> str:
     half = limit // 2
     return (f"{text[:half]}\n... [{len(text) - limit} characters cut] ...\n"
             f"{text[-half:]}")
+
+
+def _run_setup(sandbox: Sandbox, setup_code: str) -> str | None:
+    """Run the setup code; return an error message if it failed."""
+    if not setup_code:
+        return None
+    result = sandbox.execute(setup_code)
+    return f"setup code failed: {result.error}" if result.error else None
 
 
 def _out_of_budget(
@@ -94,25 +102,33 @@ def run_agent(
         system_prompt=system_prompt)
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": task_prompt}]
-    setup = sandbox.execute(setup_code) if setup_code else None
-    if setup is not None and setup.error:
-        output.error = f"setup code failed: {setup.error}"
+    try:
+        output.error = _run_setup(sandbox, setup_code)
+    except SandboxError as exc:
+        output.error = f"sandbox failed: {exc}"
     for step in range(1, limits.max_iterations + 1):
         if output.error:
             break
-        output.error = _out_of_budget(
-            output, messages, limits, time.monotonic() - start)
+        elapsed = time.monotonic() - start
+        output.error = _out_of_budget(output, messages, limits, elapsed)
         if output.error:
             break
         try:
             response = llm.complete(
                 messages, STOP_SEQUENCES,
-                limits.max_output_tokens - output.total_output_tokens)
+                limits.max_output_tokens - output.total_output_tokens,
+                limits.max_seconds - elapsed)
         except Exception as exc:
             output.error = f"LLM request failed: {type(exc).__name__}: {exc}"
             break
         code, note = extract_code(response.text)
-        result = sandbox.execute(code) if code else None
+        try:
+            result = sandbox.execute(code) if code else None
+            if result and result.worker_restarted:
+                # A restarted worker lost the variables defined by setup.
+                output.error = _run_setup(sandbox, setup_code)
+        except SandboxError as exc:
+            result, output.error = None, f"sandbox failed: {exc}"
         observation = _shorten(
             result.to_observation(), limits.max_observation_chars
         ) if result else ""
@@ -130,6 +146,8 @@ def run_agent(
         if result and result.final_answer_called:
             output.success = True
             output.solution = result.final_answer or ""
+            break
+        if output.error:
             break
         feedback = "\n".join(p for p in (note, observation) if p)
         messages += [{"role": "assistant", "content": response.text},

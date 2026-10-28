@@ -12,7 +12,27 @@ Each turn: one short "Thought:" line, then exactly one code block:
 ...
 ```<end_code>
 You then receive "Observation:" with what your code printed. Never write
-the Observation yourself. Call final_answer(...) as soon as you are done."""
+the Observation yourself. Call final_answer(...) as soon as you are done.
+
+Example of a loop:
+Thought: Check my function on a sample.
+```python
+def last(xs): return xs[-1]
+print(last([]))
+```<end_code>
+Observation:
+IndexError: list index out of range
+Thought: Empty lists must return None.
+```python
+def last(xs): return xs[-1] if xs else None
+print(last([]), last([1, 2]))
+```<end_code>
+Observation:
+None 2
+Thought: Both cases work, I submit.
+```python
+final_answer("def last(xs): return xs[-1] if xs else None")
+```<end_code>"""
 
 MBPP_METHOD = """Test and submit in one turn when you can:
 ```python

@@ -8,7 +8,8 @@ from smith.agent.loop import AgentLimits, run_agent
 from smith.llm.base import LLMResponse
 from smith.models import SolutionOutput
 from smith.sandbox.config import SmithSandboxConfig
-from smith.sandbox.sandbox import Sandbox
+from smith.sandbox.results import ExecutionResult
+from smith.sandbox.sandbox import Sandbox, SandboxError
 
 
 class FakeLLM:
@@ -22,7 +23,8 @@ class FakeLLM:
         self.calls: list[list[dict[str, str]]] = []
 
     def complete(self, messages: list[dict[str, str]], stop: list[str],
-                 max_tokens: int) -> LLMResponse:
+                 max_tokens: int, timeout: float) -> LLMResponse:
+        assert 0 < timeout <= AgentLimits.mbpp().max_seconds
         self.calls.append(list(messages))
         if not self.answers:
             raise RuntimeError("provider down")
@@ -95,3 +97,25 @@ def test_setup_code_defines_variables(sandbox: Sandbox) -> None:
     llm = FakeLLM(["```python\nfinal_answer(str(test_list))\n```"])
     output = _run(llm, sandbox, setup_code="test_list = ['assert 1']")
     assert output.solution == "['assert 1']"
+
+
+def test_setup_code_survives_restart() -> None:
+    config = SmithSandboxConfig(allowed_directories=[],
+                                max_execution_time_seconds=1)
+    llm = FakeLLM(["```python\nwhile True: pass\n```",
+                   "```python\nfinal_answer(str(test_list))\n```"])
+    with Sandbox(config) as box:
+        output = _run(llm, box, setup_code="test_list = ['assert 1']")
+    assert output.solution == "['assert 1']"
+
+
+class BrokenSandbox:
+    def execute(self, code: str) -> ExecutionResult:
+        raise SandboxError("worker failed to start")
+
+
+def test_sandbox_failure_is_reported() -> None:
+    llm = FakeLLM(["```python\nprint(1)\n```"])
+    output = _run(llm, BrokenSandbox())  # type: ignore[arg-type]
+    assert not output.success and output.iterations == 1
+    assert output.error is not None and "sandbox failed" in output.error

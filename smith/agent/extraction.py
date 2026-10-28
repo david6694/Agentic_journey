@@ -14,8 +14,10 @@ NO_CODE_NOTE = (
     "```python\n...\n```<end_code>"
 )
 
-PYTHON_BLOCK = re.compile(
-    r"```(?:python|py)?[ \t]*\n(.*?)(```|$)", re.DOTALL)
+# Any fenced block is matched, so the closing fence of a ```json block is
+# never mistaken for an opening one; only Python tags are kept.
+FENCED_BLOCK = re.compile(r"```([\w+-]*)[ \t]*\n(.*?)(```|$)", re.DOTALL)
+PYTHON_TAGS = ("", "python", "py", "python3")
 XML_INVOKE = re.compile(r'<invoke name="([^"]+)">(.*?)</invoke>', re.DOTALL)
 XML_PARAMETER = re.compile(
     r'<parameter name="([^"]+)">(.*?)</parameter>', re.DOTALL)
@@ -35,7 +37,8 @@ def _python_call(name: str, args: dict[str, Any]) -> str | None:
 
 
 def _from_python_blocks(text: str) -> tuple[str | None, str | None]:
-    blocks = PYTHON_BLOCK.findall(text)
+    blocks = [(body, end) for tag, body, end in FENCED_BLOCK.findall(text)
+              if tag.lower() in PYTHON_TAGS]
     code = "\n\n".join(body.strip() for body, _ in blocks if body.strip())
     if not code:
         return None, None

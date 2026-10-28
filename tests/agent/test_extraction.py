@@ -19,6 +19,13 @@ def test_several_blocks_are_joined() -> None:
     assert code == "a = 1\n\nprint(a)"
 
 
+def test_other_fenced_blocks_are_ignored() -> None:
+    for tag in ("json", "text"):
+        code, _ = extract_code(
+            f"Thought: x\n```{tag}\n{{}}\n```\nnow:\n```python\nprint(1)\n```")
+        assert code == "print(1)"
+
+
 def test_xml_tool_call() -> None:
     text = ('<invoke name="read_file"><parameter name="filepath">'
             "/testbed/a'b.py</parameter></invoke>")

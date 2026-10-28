@@ -25,11 +25,14 @@ class LLMClient(Protocol):
     """Anything that can complete a chat conversation."""
 
     def complete(
-        self, messages: list[dict[str, str]], stop: list[str], max_tokens: int
+        self, messages: list[dict[str, str]], stop: list[str],
+        max_tokens: int, timeout: float,
     ) -> LLMResponse:
         """Return the model's answer to `messages`.
 
         Generation stops at any string of `stop` (not included in text).
+        `timeout` is the time left for the task, in seconds: retries and
+        fallbacks included, the call must return or raise before it.
         Raises an exception once every retry and fallback has failed.
         """
         ...
