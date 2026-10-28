@@ -18,7 +18,7 @@ from contextlib import AsyncExitStack
 from typing import Any, Literal
 
 from mcp import ClientSession, StdioServerParameters, types
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import get_default_environment, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from pydantic import AnyUrl, BaseModel, Field
 
@@ -50,6 +50,9 @@ class ToolSpec(BaseModel):
         """Parameter names in positional order."""
         return [param.name for param in self.params]
 
+
+# Passed to stdio MCP servers on top of HOME, PATH, USER...
+SERVER_ENV_VARS = ("TESTBED_PATH", "DOCKER_HOST")
 
 JSON_TYPES = {
     "string": "str", "integer": "int", "number": "float",
@@ -107,6 +110,15 @@ def parse_tool(tool: types.Tool) -> ToolSpec:
         description=tool.description or "",
         params=params,
     )
+
+
+def server_environment() -> dict[str, str]:
+    """Environment of a stdio MCP server: the SDK's safe defaults plus
+    the variables our tools need. Never the API keys loaded from .env."""
+    env = get_default_environment()
+    env.update({name: os.environ[name] for name in SERVER_ENV_VARS
+                if name in os.environ})
+    return env
 
 
 def _content_to_text(content: Any) -> str:
@@ -217,10 +229,8 @@ class McpClient:
             argv = shlex.split(self.target)
             if not argv:
                 raise McpConnectionError("empty MCP stdio command")
-            # The full environment is passed on purpose: SWE-bench tools
-            # need variables such as TESTBED_PATH.
             params = StdioServerParameters(
-                command=argv[0], args=argv[1:], env=dict(os.environ))
+                command=argv[0], args=argv[1:], env=server_environment())
             read, write = await stack.enter_async_context(
                 stdio_client(params))
         else:

@@ -9,10 +9,21 @@ from collections.abc import Iterator
 import pytest
 
 from smith.sandbox.config import SmithSandboxConfig
-from smith.sandbox.mcp_client import McpClient, McpConnectionError
+from smith.sandbox.mcp_client import (
+    McpClient, McpConnectionError, server_environment)
 from smith.sandbox.sandbox import Sandbox
 
 from .conftest import DUMMY_SERVER
+
+
+def test_server_environment_has_no_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "secret")
+    monkeypatch.setenv("TESTBED_PATH", "/testbed")
+    env = server_environment()
+    assert "GROQ_API_KEY" not in env
+    assert env["TESTBED_PATH"] == "/testbed" and "PATH" in env
 
 
 def test_discovery(mcp_stdio: McpClient) -> None:
