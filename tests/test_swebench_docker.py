@@ -94,6 +94,13 @@ def test_read_file_sees_run_tests_changes(
     assert "1: z = 1" in swe.read_file("from_eval.py")
 
 
+def test_test_reading_stdin_does_not_eat_the_eval_script(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_SCRIPT", "cat >/dev/null\necho RESTORED\n")
+    assert "RESTORED" in swe.run_tests()
+
+
 def test_tools_show_paths_usable_in_the_container(
     container: SWEBenchContainer,
 ) -> None:

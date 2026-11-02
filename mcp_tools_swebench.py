@@ -256,8 +256,16 @@ def run_tests() -> str:
                 else "pytest -q"
             )
             proc = subprocess.run(
-                ["docker", "exec", "-i", "-w", "/testbed", cid, "bash"],
-                input=script,
+                [
+                    "docker",
+                    "exec",
+                    "-w",
+                    "/testbed",
+                    cid,
+                    "bash",
+                    "-c",
+                    script,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=120,
