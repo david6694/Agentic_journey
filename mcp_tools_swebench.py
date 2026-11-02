@@ -7,7 +7,7 @@ import subprocess
 import tarfile
 import threading
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -20,6 +20,8 @@ RUN_COMMAND_TIMEOUT = 60
 MAX_SYNCED_FILE_KB = 5_000
 MAX_SYNC_BYTES = 200_000_000
 SYNC_TIMEOUT = 120
+TEST_START = ">>>>> Start Test Output"
+TEST_END = ">>>>> End Test Output"
 
 
 def _testbed() -> Path:
@@ -324,6 +326,18 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
     return _truncate("\n".join(matches)) if matches else "No references found."
 
 
+def _test_results(output: str) -> Optional[str]:
+    """Part of an eval script's output between the SWE-bench test markers.
+
+    What comes before (git show, pip, conda) can reach 350 000 characters and
+    pushed the results out of what the LLM receives. None without markers.
+    """
+    start, end = output.find(TEST_START), output.rfind(TEST_END)
+    if start == -1 or end == -1:
+        return None
+    return output[output.find("\n", start) + 1:output.rfind("\n", 0, end)]
+
+
 @mcp.tool()
 def run_tests() -> str:
     """Execute the evaluation script or test suite in TESTBED_PATH."""
@@ -333,10 +347,13 @@ def run_tests() -> str:
     try:
         if cid:
             proc = _exec_in_container(
-                ["bash", "-c", eval_script or "pytest -q"],
+                ["bash", "-c", f"exec 2>&1\n{eval_script or 'pytest -q'}"],
                 "/testbed",
                 RUN_TESTS_TIMEOUT,
             )
+            results = _test_results(proc.stdout)
+            if results is not None:
+                return _truncate(results)
         else:
             cmd = ["bash", "-c", eval_script] if eval_script else [
                 "pytest",

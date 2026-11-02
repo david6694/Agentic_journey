@@ -79,6 +79,22 @@ def test_eval_script_stays_out_of_the_repository(
         assert "EVAL_OK" in swe.run_tests()
 
 
+def test_run_tests_returns_the_results_without_the_setup_noise(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    noise = "x" * 30_000
+    monkeypatch.setenv(
+        "EVAL_SCRIPT",
+        f"echo {noise}\nset -x\n: '>>>>> Start Test Output'\n"
+        "echo ON_STDOUT\necho ON_STDERR >&2\n"
+        ": '>>>>> End Test Output'\necho AFTER\n",
+    )
+    result = swe.run_tests()
+    assert "ON_STDOUT" in result and "ON_STDERR" in result
+    assert noise not in result and "AFTER" not in result
+    assert ">>>>>" not in result
+
+
 def test_read_file_sees_run_command_changes(
     container: SWEBenchContainer,
 ) -> None:
