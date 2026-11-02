@@ -34,8 +34,10 @@ Thought: Both cases work, I submit.
 final_answer("def last(xs): return xs[-1] if xs else None")
 ```<end_code>"""
 
-MBPP_METHOD = """Keep the exact Signature name. Put your solution in `code`,
-test with `run_tests(code, test_list)`, and submit in one turn when you can:
+MBPP_METHOD = """Keep the exact Signature name. Your token budget is tiny.
+In EVERY turn, put your full solution in `code` and test it in the same block
+with `run_tests(code, test_list)`. Never define a function without testing it.
+`test_list` already exists: never redefine it; fix your code, not the tests.
 ```python
 import json
 code = '''def add(a, b):
