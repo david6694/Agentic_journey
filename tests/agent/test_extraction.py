@@ -64,3 +64,18 @@ def test_malformed_call_is_reported() -> None:
 
 def test_nothing_found() -> None:
     assert extract_code("I think the answer is 42.") == (None, NO_CODE_NOTE)
+
+
+def test_fence_inside_a_string_does_not_close_the_block() -> None:
+    answer = (
+        'Thought: Submit.\n```python\nfinal_answer("""```diff\n'
+        '+    x = 1\n```""")\n```'
+    )
+    code, note = extract_code(answer)
+    assert code == 'final_answer("""```diff\n+    x = 1\n```""")'
+    assert note is None
+
+
+def test_closing_fence_right_after_the_code() -> None:
+    code, note = extract_code("```python\nprint(1)```<end_code>")
+    assert code == "print(1)" and note is None

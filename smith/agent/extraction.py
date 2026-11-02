@@ -15,8 +15,13 @@ NO_CODE_NOTE = (
 )
 
 # Any fenced block is matched, so the closing fence of a ```json block is
-# never mistaken for an opening one; only Python tags are kept.
-FENCED_BLOCK = re.compile(r"```([\w+-]*)[ \t]*\n(.*?)(```|$)", re.DOTALL)
+# never mistaken for an opening one; only Python tags are kept. A block closes
+# on a fence alone on its line or ending the text: code may contain fences,
+# such as a final_answer() string quoting a Markdown block.
+FENCED_BLOCK = re.compile(
+    r"```([\w+-]*)[ \t]*\n(.*?)"
+    r"(^```[ \t]*(?:<end_code>)?[ \t]*$|```(?:<end_code>)?\s*\Z|\Z)",
+    re.DOTALL | re.MULTILINE)
 PYTHON_TAGS = ("", "python", "py", "python3")
 XML_INVOKE = re.compile(r'<invoke name="([^"]+)">(.*?)</invoke>', re.DOTALL)
 XML_PARAMETER = re.compile(
