@@ -16,10 +16,13 @@ Requires Python 3.10 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
+cp .env.example .env                             # then add your API keys
 uv run sandbox                                   # interactive sandbox
 uv run sandbox sandbox_template.json             # custom configuration
 uv run sandbox --mcp-stdio "python mcp_tools_mbpp.py" sandbox_template.json
 uv run sandbox --mcp-server <URL>                # MCP over HTTP
+uv run python -m agent_mbpp --task-file task.json --output solution.json \
+    --model-name "model/name" --provider-url "https://provider.api/v1"
 uv run pytest tests
 ```
 
