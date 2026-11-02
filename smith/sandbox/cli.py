@@ -5,6 +5,7 @@ Usage:
 """
 
 import argparse
+import ast
 import codeop
 import sys
 
@@ -47,7 +48,12 @@ def read_entry() -> str | None:
     lines: list[str] = []
     prompt = ">>> "
     while True:
-        line = input(prompt)
+        try:
+            line = input(prompt)
+        except EOFError:
+            if lines:
+                return "\n".join(lines)
+            raise
         if not lines and line.strip() == EXIT_COMMAND:
             return None
         lines.append(line)
@@ -61,6 +67,41 @@ def read_entry() -> str | None:
         prompt = "... "
 
 
+def _split_script(source: str) -> list[str]:
+    """Split a non-interactive script into top-level statements."""
+    lines = [
+        line for line in source.splitlines()
+        if line.strip() != EXIT_COMMAND
+    ]
+    cleaned = "\n".join(lines)
+    if not cleaned.strip():
+        return []
+    try:
+        tree = ast.parse(cleaned)
+    except SyntaxError:
+        return [cleaned]
+    segments = [
+        ast.get_source_segment(cleaned, node) or ""
+        for node in tree.body
+    ]
+    return [seg for seg in segments if seg.strip()]
+
+
+def _run_source(sandbox: Sandbox, source: str) -> None:
+    """Execute one statement in the sandbox and print its output."""
+    try:
+        result = sandbox.execute(source)
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt: execution stopped, sandbox "
+              "restarted (variables lost)")
+        return
+    text = result.to_observation(empty_message="")
+    if text:
+        print(text)
+    if result.final_answer_called:
+        print(f"[final_answer] {result.final_answer}")
+
+
 def run_repl(sandbox: Sandbox, show_manual: bool) -> None:
     """Read-eval-print loop until 'exit', Ctrl+D or SystemExit."""
     try:
@@ -72,6 +113,10 @@ def run_repl(sandbox: Sandbox, show_manual: bool) -> None:
     print(f"Type '{EXIT_COMMAND}' or press Ctrl+D to quit.")
     if show_manual:
         print(sandbox.manual)
+    if not sys.stdin.isatty():
+        for chunk in _split_script(sys.stdin.read()):
+            _run_source(sandbox, chunk)
+        return
     while True:
         try:
             source = read_entry()
@@ -85,17 +130,7 @@ def run_repl(sandbox: Sandbox, show_manual: bool) -> None:
             return
         if not source.strip():
             continue
-        try:
-            result = sandbox.execute(source)
-        except KeyboardInterrupt:
-            print("\nKeyboardInterrupt: execution stopped, sandbox "
-                  "restarted (variables lost)")
-            continue
-        text = result.to_observation(empty_message="")
-        if text:
-            print(text)
-        if result.final_answer_called:
-            print(f"[final_answer] {result.final_answer}")
+        _run_source(sandbox, source)
 
 
 def main(argv: list[str] | None = None) -> None:

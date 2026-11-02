@@ -15,5 +15,12 @@ evaluations/
 
 # OS
 .DS_Store
+__MACOSX/
+*:Zone.Identifier
 
 context/
+.exams
+exams/
+moulinette/
+moulinette.zip
+

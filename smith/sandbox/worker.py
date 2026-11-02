@@ -62,12 +62,8 @@ class ToolError(Exception):
 ToolError.__module__ = "builtins"
 
 
-class _FinalAnswerSignal(BaseException):
-    """Stops the current execution once final_answer() is called.
-
-    BaseException so that a bare `except Exception` in the sandboxed
-    code cannot swallow it.
-    """
+class _FinalAnswerSignal(Exception):
+    """Stops the current execution once final_answer() is called."""
 
 
 class _PipeWriter(io.TextIOBase):

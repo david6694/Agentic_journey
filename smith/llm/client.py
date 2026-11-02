@@ -11,9 +11,15 @@ from dotenv import load_dotenv
 
 from smith.models import StepMetrics
 
-DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parents[2] / "configs" / "providers.json"
-)
+
+def _default_config_path() -> Path:
+    cwd_cfg = Path.cwd() / "configs" / "providers.json"
+    if cwd_cfg.is_file():
+        return cwd_cfg
+    return Path(__file__).resolve().parents[2] / "configs" / "providers.json"
+
+
+DEFAULT_CONFIG_PATH = _default_config_path()
 
 URL_TO_ENV: Dict[str, str] = {
     "openrouter.ai": "OPENROUTER_API_KEY",
@@ -22,6 +28,7 @@ URL_TO_ENV: Dict[str, str] = {
     "api.mistral.ai": "MISTRAL_API_KEY",
     "generativelanguage.googleapis.com": "GEMINI_API_KEY",
     "api.together.xyz": "TOGETHER_API_KEY",
+    "ai-gateway.vercel.sh": "VERCEL_API_KEY",
 }
 
 
@@ -94,21 +101,21 @@ class LLMClient:
         config_path: Optional[Path] = None,
     ) -> None:
         load_dotenv()
-        cfg = self._load_config(config_path or DEFAULT_CONFIG_PATH)
-        default_prov = cfg.get("default_provider", "openrouter")
+        cfg = self._load_config(config_path or _default_config_path())
+        default_prov = cfg.get("default_provider", "mistral")
         prov_map = cfg.get("providers", {})
 
         self.api_url = (
             provider_url
             or os.environ.get("LLM_PROVIDER_URL")
             or prov_map.get(default_prov, {}).get(
-                "api_url", "https://openrouter.ai/api/v1"
+                "api_url", "https://api.mistral.ai/v1"
             )
         ).rstrip("/")
         self.model_name = (
             model_name
             or os.environ.get("LLM_MODEL_NAME")
-            or cfg.get("default_model", "qwen/qwen3-235b-a22b:free")
+            or cfg.get("default_model", "codestral-latest")
         )
         env_var = self._resolve_env_var(self.api_url, prov_map)
         self.rotator = KeyRotator(env_var, explicit_keys=api_keys)
@@ -226,7 +233,14 @@ class LLMClient:
                     retries=retries,
                 )
             except urllib.error.HTTPError as exc:
-                last_error = exc
+                detail = ""
+                try:
+                    detail = exc.read().decode("utf-8", errors="replace")[:200]
+                except Exception:
+                    pass
+                last_error = RuntimeError(
+                    f"{exc} ({self.api_url} {self.model_name}): {detail}"
+                )
                 self.rotator.rotate()
                 if attempt < self.max_retries:
                     retries += 1
