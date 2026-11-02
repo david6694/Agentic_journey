@@ -53,7 +53,7 @@ SWEBENCH_METHOD = """Fix the bug in the repository like a careful engineer:
 2. Reproduce the bug before changing anything when possible.
 3. Fix the root cause with minimal edits (edit_file).
 4. Check with run_tests(); iterate until the failing tests pass.
-5. final_answer(get_patch())
+5. Call exactly final_answer(get_patch()): never retype the patch yourself.
 Print only what you need: long outputs waste your budget."""
 
 
