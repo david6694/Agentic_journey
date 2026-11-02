@@ -1,9 +1,11 @@
 """MCP server exposing the 9 mandatory tools for the SWE-bench benchmark."""
 import ast
 import fnmatch
+import io
 import os
 import re
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import List
 
@@ -15,6 +17,8 @@ IGNORED_DIRS = {".git", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache"}
 MAX_OUTPUT_CHARS = 20000
 RUN_TESTS_TIMEOUT = 120
 RUN_COMMAND_TIMEOUT = 60
+MAX_SYNCED_FILE_KB = 5_000
+MAX_SYNC_BYTES = 200_000_000
 
 
 def _testbed() -> Path:
@@ -64,16 +68,37 @@ def _sync_to_container(target: Path) -> None:
     )
 
 
-def _sync_from_container() -> None:
+def _sync_from_container(since: str) -> None:
+    """Copy the files changed in the container since `since` to the host.
+
+    The container runs untrusted code: only regular files of a sane size
+    reach the host, never symlinks, FIFOs or huge files.
+    """
     # shortcut: files deleted in the container stay in the local copy, rare
     # for a bug fix; compare with `git status` if an agent trips over it.
-    subprocess.run(
-        ["docker", "cp", f"{_container_id()}:/testbed/.", str(_testbed())],
+    pruned = " -o ".join(f"-name {name}" for name in sorted(IGNORED_DIRS))
+    script = (
+        f"find . \\( {pruned} \\) -prune -o -type f -newerct @{since} "
+        f"-size -{MAX_SYNCED_FILE_KB}k -print0 "
+        f"| tar --null -T - -cf - | head -c {MAX_SYNC_BYTES}"
+    )
+    proc = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-w",
+            "/testbed",
+            _container_id(),
+            "bash",
+            "-c",
+            script,
+        ],
         capture_output=True,
-        text=True,
         timeout=120,
         check=True,
     )
+    with tarfile.open(fileobj=io.BytesIO(proc.stdout)) as archive:
+        archive.extractall(_testbed(), filter="data")
 
 
 def _exec_in_container(
@@ -84,6 +109,13 @@ def _exec_in_container(
     Killing `docker exec` leaves the command running in the container, so
     `timeout` stops it in there. The local limit is only a safety net.
     """
+    since = subprocess.run(
+        ["docker", "exec", _container_id(), "date", "+%s.%N"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    ).stdout.strip()
     proc = subprocess.run(
         [
             "docker",
@@ -101,7 +133,7 @@ def _exec_in_container(
         text=True,
         timeout=seconds + 10,
     )
-    _sync_from_container()
+    _sync_from_container(since)
     if proc.returncode == 124:
         raise subprocess.TimeoutExpired(argv, seconds)
     return proc

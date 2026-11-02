@@ -124,6 +124,27 @@ def test_timed_out_eval_stops_in_the_container(
     assert "exit_code: 1" in swe.run_command("test -e /tmp/alive")
 
 
+def test_symlink_from_container_cannot_read_host_files(
+    container: SWEBenchContainer, tmp_path: Path
+) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP_SECRET\n", encoding="utf-8")
+    swe.run_command(f"ln -s {secret} leak.txt")
+    assert "TOP_SECRET" not in swe.search_code("TOP_SECRET")
+    assert "TOP_SECRET" not in swe.read_file("leak.txt")
+    assert container.testbed_path is not None
+    assert not (container.testbed_path / "leak.txt").is_symlink()
+
+
+def test_only_reasonable_regular_files_reach_the_host(
+    container: SWEBenchContainer,
+) -> None:
+    swe.run_command("mkfifo pipe; truncate -s 6M big.bin; echo ok > small.txt")
+    assert swe.list_files().split() == [
+        "/testbed/app.py", "/testbed/small.txt"
+    ]
+
+
 def test_tools_show_paths_usable_in_the_container(
     container: SWEBenchContainer,
 ) -> None:
