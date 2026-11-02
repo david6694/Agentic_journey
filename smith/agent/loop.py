@@ -26,9 +26,9 @@ class AgentLimits(BaseModel):
 
     @classmethod
     def mbpp(cls) -> "AgentLimits":
-        """Subject limits, with 20s kept for startup and writing."""
+        """Subject limits, with 30s kept for the last block and startup."""
         return cls(max_iterations=10, max_input_tokens=6_000,
-                   max_output_tokens=1_500, max_seconds=100,
+                   max_output_tokens=1_500, max_seconds=90,
                    max_observation_chars=1_000)
 
     @classmethod

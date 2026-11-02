@@ -102,3 +102,4 @@ def test_agent_mbpp_end_to_end(
     assert "run_tests" in sol.steps[0].sandbox_input
     assert "All 2 tests passed" in sol.steps[0].sandbox_output
     assert "run_tests" in sol.system_prompt
+    assert "Limits per execution: 10s" in sol.system_prompt

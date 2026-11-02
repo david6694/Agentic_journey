@@ -13,7 +13,7 @@ from smith.agent.prompts import (
 )
 from smith.llm.client import LLMClient
 from smith.models import MBPPTaskInput, SolutionOutput
-from smith.sandbox.config import load_config
+from smith.sandbox.config import SmithSandboxConfig, load_config
 from smith.sandbox.mcp_client import McpClient
 from smith.sandbox.sandbox import Sandbox
 
@@ -99,7 +99,14 @@ def main(argv: list[str] | None = None) -> int:
     stdio_cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(mcp_script))}"
 
     try:
-        config = load_config(args.sandbox_config)
+        # The moulinette kills the agent at 120s: one block must stay short.
+        config = (
+            load_config(args.sandbox_config)
+            if args.sandbox_config
+            else SmithSandboxConfig(
+                max_execution_time_seconds=10, mcp_call_timeout_seconds=15
+            )
+        )
         llm = LLMClient(
             model_name=args.model_name,
             provider_url=args.provider_url,
