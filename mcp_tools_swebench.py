@@ -13,6 +13,8 @@ mcp = FastMCP("swebench-tools")
 
 IGNORED_DIRS = {".git", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache"}
 MAX_OUTPUT_CHARS = 20000
+RUN_TESTS_TIMEOUT = 120
+RUN_COMMAND_TIMEOUT = 60
 
 
 def _testbed() -> Path:
@@ -72,6 +74,37 @@ def _sync_from_container() -> None:
         timeout=120,
         check=True,
     )
+
+
+def _exec_in_container(
+    argv: List[str], workdir: str, seconds: int
+) -> "subprocess.CompletedProcess[str]":
+    """Run a command in the container, then refresh the local copy.
+
+    Killing `docker exec` leaves the command running in the container, so
+    `timeout` stops it in there. The local limit is only a safety net.
+    """
+    proc = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-w",
+            workdir,
+            _container_id(),
+            "timeout",
+            "-k",
+            "5",
+            str(seconds),
+            *argv,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=seconds + 10,
+    )
+    _sync_from_container()
+    if proc.returncode == 124:
+        raise subprocess.TimeoutExpired(argv, seconds)
+    return proc
 
 
 def _truncate(text: str) -> str:
@@ -255,22 +288,9 @@ def run_tests() -> str:
                 if eval_file.is_file()
                 else "pytest -q"
             )
-            proc = subprocess.run(
-                [
-                    "docker",
-                    "exec",
-                    "-w",
-                    "/testbed",
-                    cid,
-                    "bash",
-                    "-c",
-                    script,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120,
+            proc = _exec_in_container(
+                ["bash", "-c", script], "/testbed", RUN_TESTS_TIMEOUT
             )
-            _sync_from_container()
         else:
             if eval_script:
                 cmd = ["bash", "-c", eval_script]
@@ -283,7 +303,7 @@ def run_tests() -> str:
                 cwd=str(root),
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=RUN_TESTS_TIMEOUT,
             )
         out = (
             f"exit_code: {proc.returncode}\n"
@@ -292,7 +312,10 @@ def run_tests() -> str:
         )
         return _truncate(out.strip())
     except subprocess.TimeoutExpired:
-        return "Error: Test execution timed out after 120 seconds."
+        return (
+            f"Error: Test execution timed out after {RUN_TESTS_TIMEOUT} "
+            "seconds."
+        )
     except Exception as exc:
         return f"Error running tests: {exc}"
 
@@ -350,22 +373,9 @@ def run_command(command: str, workdir: str = "") -> str:
                 if str(rel_cwd) == "."
                 else f"/testbed/{rel_cwd.as_posix()}"
             )
-            proc = subprocess.run(
-                [
-                    "docker",
-                    "exec",
-                    "-w",
-                    container_cwd,
-                    cid,
-                    "bash",
-                    "-c",
-                    command,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
+            proc = _exec_in_container(
+                ["bash", "-c", command], container_cwd, RUN_COMMAND_TIMEOUT
             )
-            _sync_from_container()
         else:
             proc = subprocess.run(
                 command,
@@ -373,7 +383,7 @@ def run_command(command: str, workdir: str = "") -> str:
                 cwd=str(cwd),
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=RUN_COMMAND_TIMEOUT,
             )
         out = (
             f"exit_code: {proc.returncode}\n"
@@ -382,7 +392,7 @@ def run_command(command: str, workdir: str = "") -> str:
         )
         return _truncate(out.strip())
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 60 seconds."
+        return f"Error: Command timed out after {RUN_COMMAND_TIMEOUT} seconds."
     except Exception as exc:
         return f"Error executing command: {exc}"
 

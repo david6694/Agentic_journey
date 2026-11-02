@@ -101,6 +101,29 @@ def test_test_reading_stdin_does_not_eat_the_eval_script(
     assert "RESTORED" in swe.run_tests()
 
 
+def test_timed_out_command_stops_in_the_container(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = "import time; time.sleep(2); open('/tmp/alive', 'w')"
+    monkeypatch.setattr(swe, "RUN_COMMAND_TIMEOUT", 1)
+    # `; true` keeps bash as the parent: its child must be killed as well.
+    result = swe.run_command(f'python -c "{script}"; true')
+    assert "timed out after 1 seconds" in result
+    time.sleep(2.5)
+    monkeypatch.setattr(swe, "RUN_COMMAND_TIMEOUT", 60)
+    assert "exit_code: 1" in swe.run_command("test -e /tmp/alive")
+
+
+def test_timed_out_eval_stops_in_the_container(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_SCRIPT", "sleep 2; touch /tmp/alive")
+    monkeypatch.setattr(swe, "RUN_TESTS_TIMEOUT", 1)
+    assert "timed out after 1 seconds" in swe.run_tests()
+    time.sleep(2.5)
+    assert "exit_code: 1" in swe.run_command("test -e /tmp/alive")
+
+
 def test_tools_show_paths_usable_in_the_container(
     container: SWEBenchContainer,
 ) -> None:
