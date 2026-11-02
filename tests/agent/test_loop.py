@@ -21,6 +21,7 @@ class FakeLLM:
     def __init__(self, answers: list[str]) -> None:
         self.answers = answers
         self.calls: list[list[dict[str, str]]] = []
+        self.max_tokens: list[int | None] = []
 
     def generate(self, messages: list[dict[str, str]], *, step: int,
                  stop: list[str] | None, max_tokens: int | None,
@@ -28,6 +29,7 @@ class FakeLLM:
         assert timeout is not None
         assert 0 < timeout <= AgentLimits.mbpp().max_seconds
         self.calls.append(list(messages))
+        self.max_tokens.append(max_tokens)
         if not self.answers:
             raise RuntimeError("provider down")
         size = sum(len(m["content"]) for m in messages)
@@ -109,6 +111,17 @@ def test_setup_code_survives_restart() -> None:
     with Sandbox(config) as box:
         output = _run(llm, box, setup_code="test_list = ['assert 1']")
     assert output.solution == "['assert 1']"
+
+
+def test_output_is_capped_per_turn_then_by_what_is_left(
+    sandbox: Sandbox,
+) -> None:
+    limits = AgentLimits.mbpp()
+    limits.max_output_tokens = 440
+    llm = FakeLLM(["```python\nprint(1)\n```",
+                   "```python\nfinal_answer('done')\n```"])
+    _run(llm, sandbox, limits)
+    assert llm.max_tokens == [limits.max_turn_output_tokens, 390]
 
 
 def test_time_before_the_loop_counts(sandbox: Sandbox) -> None:

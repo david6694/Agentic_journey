@@ -21,22 +21,26 @@ class AgentLimits(BaseModel):
     max_iterations: int
     max_input_tokens: int
     max_output_tokens: int
+    max_turn_output_tokens: int
     max_seconds: float
     max_observation_chars: int
 
     @classmethod
     def mbpp(cls) -> "AgentLimits":
-        """Subject limits, with 30s kept for the last block and startup."""
+        """Subject limits, with 30s kept for the last block and startup.
+
+        One rambling answer must not consume the whole output budget.
+        """
         return cls(max_iterations=10, max_input_tokens=6_000,
-                   max_output_tokens=1_500, max_seconds=90,
-                   max_observation_chars=1_000)
+                   max_output_tokens=1_500, max_turn_output_tokens=400,
+                   max_seconds=90, max_observation_chars=1_000)
 
     @classmethod
     def swebench(cls) -> "AgentLimits":
         """Subject limits, with 150s kept for a last run_tests and cleanup."""
         return cls(max_iterations=30, max_input_tokens=300_000,
-                   max_output_tokens=10_000, max_seconds=750,
-                   max_observation_chars=8_000)
+                   max_output_tokens=10_000, max_turn_output_tokens=10_000,
+                   max_seconds=750, max_observation_chars=8_000)
 
 
 def _shorten(text: str, limit: int) -> str:
@@ -119,8 +123,9 @@ def run_agent(
         try:
             metrics = llm.generate(
                 messages, step=step, stop=STOP_SEQUENCES,
-                max_tokens=limits.max_output_tokens
-                - output.total_output_tokens,
+                max_tokens=min(
+                    limits.max_turn_output_tokens,
+                    limits.max_output_tokens - output.total_output_tokens),
                 timeout=limits.max_seconds - elapsed)
         except Exception as exc:
             output.error = f"LLM request failed: {type(exc).__name__}: {exc}"
