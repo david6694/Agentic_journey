@@ -65,8 +65,9 @@ class SWEBenchContainer:
         )
         if inspect.returncode == 0:
             return
+        # SWE-bench images only exist for amd64: arm64 hosts run them emulated.
         pull = subprocess.run(
-            ["docker", "pull", self.docker_image],
+            ["docker", "pull", "--platform", "linux/amd64", self.docker_image],
             capture_output=True,
             text=True,
             timeout=self.pull_timeout,
