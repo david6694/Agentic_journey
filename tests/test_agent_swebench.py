@@ -4,14 +4,15 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Dict, List
+from typing import Dict, List, Tuple, cast
 
 import pytest
 
-from agent_swebench.__main__ import main
+from agent_swebench.__main__ import _submit_unfinished_work, main
 from agent_swebench.docker_env import SWEBenchContainer
 from smith.llm.client import LLMClient
 from smith.models import SolutionOutput, StepMetrics, SWEBenchTaskInput
+from smith.sandbox.mcp_client import McpClient, McpConnectionError
 
 
 def _init_git_repo(repo_dir: Path) -> None:
@@ -151,3 +152,52 @@ def test_agent_swebench_end_to_end(
     assert sol.iterations == 2
     # Writing to the local copy directly would never reach the patch.
     assert str(fake_testbed) not in sol.system_prompt
+
+
+class _PatchClient:
+    def __init__(self, reply: Tuple[bool, str] | None) -> None:
+        self.reply = reply
+
+    def call_tool(self, name: str, arguments: object) -> Tuple[bool, str]:
+        assert name == "get_patch"
+        if self.reply is None:
+            raise McpConnectionError("server gone")
+        return self.reply
+
+
+def _solution(success: bool, answer: str = "") -> SolutionOutput:
+    return SolutionOutput(
+        task_id="demo", benchmark="swebench", success=success,
+        solution=answer, iterations=30, total_requests=30,
+        total_input_tokens=1, total_output_tokens=1, total_time_seconds=1.0,
+        error=None if success else "no final_answer within 30 iterations",
+    )
+
+
+def _submit(sol: SolutionOutput, reply: Tuple[bool, str] | None) -> None:
+    client = cast(McpClient, _PatchClient(reply))
+    _submit_unfinished_work(sol, client)
+
+
+def test_unfinished_run_submits_the_repository_patch() -> None:
+    sol = _solution(False)
+    _submit(sol, (True, "diff --git a/x b/x\n"))
+    assert sol.solution == "diff --git a/x b/x\n"
+    assert sol.success is False and sol.error is not None
+
+
+def test_final_answer_is_left_untouched() -> None:
+    sol = _solution(True, "diff --git a/agent b/agent\n")
+    _submit(sol, (True, "diff --git a/other b/other\n"))
+    assert sol.solution == "diff --git a/agent b/agent\n"
+
+
+@pytest.mark.parametrize("reply", [
+    (True, ""), (True, "Error running git diff: x"), (False, "boom"), None,
+])
+def test_no_usable_patch_keeps_the_empty_solution(
+    reply: Tuple[bool, str] | None,
+) -> None:
+    sol = _solution(False)
+    _submit(sol, reply)
+    assert sol.solution == ""

@@ -63,6 +63,23 @@ def _write_output(path: Path, solution: SolutionOutput) -> None:
     path.write_text(solution.model_dump_json(indent=2), encoding="utf-8")
 
 
+def _submit_unfinished_work(
+    solution: SolutionOutput, mcp_client: McpClient
+) -> None:
+    """Keep the repository's patch when the agent never called final_answer.
+
+    `success` stays False and `error` keeps the reason it stopped.
+    """
+    if solution.success:
+        return
+    try:
+        ok, patch = mcp_client.call_tool("get_patch", {})
+    except Exception:  # a failure here must not lose the run's metrics
+        return
+    if ok and patch.startswith("diff --git"):
+        solution.solution = patch
+
+
 def main(argv: list[str] | None = None) -> int:
     """Load a SWE-bench task, run inside Docker, and write solution.json."""
     args = parse_args(argv)
@@ -128,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                         benchmark="swebench",
                         started_at=start,
                     )
+                    _submit_unfinished_work(solution, mcp_client)
     except Exception as exc:
         solution = SolutionOutput(
             task_id=task.instance_id,
