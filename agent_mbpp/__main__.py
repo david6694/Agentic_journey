@@ -127,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                     task_id=str(task.task_id),
                     benchmark="mbpp",
                     setup_code=setup_code,
+                    started_at=start,
                 )
     except Exception as exc:
         solution = SolutionOutput(

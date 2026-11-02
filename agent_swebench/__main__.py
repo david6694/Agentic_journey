@@ -126,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                         limits=limits,
                         task_id=task.instance_id,
                         benchmark="swebench",
+                        started_at=start,
                     )
     except Exception as exc:
         solution = SolutionOutput(

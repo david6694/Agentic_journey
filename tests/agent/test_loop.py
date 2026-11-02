@@ -1,6 +1,7 @@
 """Agent loop with a scripted LLM and a real sandbox."""
 
 from collections.abc import Iterator
+import time
 
 import pytest
 
@@ -108,6 +109,17 @@ def test_setup_code_survives_restart() -> None:
     with Sandbox(config) as box:
         output = _run(llm, box, setup_code="test_list = ['assert 1']")
     assert output.solution == "['assert 1']"
+
+
+def test_time_before_the_loop_counts(sandbox: Sandbox) -> None:
+    limits = AgentLimits.mbpp()
+    llm = FakeLLM(["```python\nfinal_answer('never asked')\n```"])
+    output = run_agent(
+        llm, sandbox, "system", "task", limits, task_id="1",
+        benchmark="mbpp", started_at=time.monotonic() - limits.max_seconds)
+    assert not llm.calls and not output.success
+    assert output.error is not None and "time budget" in output.error
+    assert output.total_time_seconds >= limits.max_seconds
 
 
 class BrokenSandbox:

@@ -33,9 +33,9 @@ class AgentLimits(BaseModel):
 
     @classmethod
     def swebench(cls) -> "AgentLimits":
-        """Subject limits, with 2 min kept for Docker setup and cleanup."""
+        """Subject limits, with 150s kept for a last run_tests and cleanup."""
         return cls(max_iterations=30, max_input_tokens=300_000,
-                   max_output_tokens=10_000, max_seconds=780,
+                   max_output_tokens=10_000, max_seconds=750,
                    max_observation_chars=8_000)
 
 
@@ -81,6 +81,7 @@ def run_agent(
     task_id: str,
     benchmark: str,
     setup_code: str = "",
+    started_at: float | None = None,
 ) -> SolutionOutput:
     """Solve one task and return the SolutionOutput the moulinette reads.
 
@@ -93,8 +94,10 @@ def run_agent(
         task_id: MBPP task id or SWE-bench instance id.
         benchmark: 'mbpp' or 'swebench'.
         setup_code: Run once in the sandbox before the first turn.
+        started_at: time.monotonic() when the agent process started, so
+            that its startup counts in the budget and in total_time_seconds.
     """
-    start = time.monotonic()
+    start = time.monotonic() if started_at is None else started_at
     output = SolutionOutput(
         task_id=task_id, benchmark=benchmark, success=False, solution="",
         iterations=0, total_requests=0, total_input_tokens=0,
