@@ -1,11 +1,11 @@
 """MCP server exposing the 9 mandatory tools for the SWE-bench benchmark."""
 import ast
 import fnmatch
-import io
 import os
 import re
 import subprocess
 import tarfile
+import threading
 from pathlib import Path
 from typing import List
 
@@ -19,6 +19,7 @@ RUN_TESTS_TIMEOUT = 120
 RUN_COMMAND_TIMEOUT = 60
 MAX_SYNCED_FILE_KB = 5_000
 MAX_SYNC_BYTES = 200_000_000
+SYNC_TIMEOUT = 120
 
 
 def _testbed() -> Path:
@@ -71,18 +72,19 @@ def _sync_to_container(target: Path) -> None:
 def _sync_from_container(since: str) -> None:
     """Copy the files changed in the container since `since` to the host.
 
-    The container runs untrusted code: only regular files of a sane size
-    reach the host, never symlinks, FIFOs or huge files.
+    The container runs untrusted code, which can even replace find or tar:
+    its stream is hostile, so the limits are enforced here, on the host. Only
+    regular files of a sane size reach the local copy, never links or FIFOs.
     """
     # shortcut: files deleted in the container stay in the local copy, rare
     # for a bug fix; compare with `git status` if an agent trips over it.
     pruned = " -o ".join(f"-name {name}" for name in sorted(IGNORED_DIRS))
+    max_file_bytes = MAX_SYNCED_FILE_KB * 1024
     script = (
         f"find . \\( {pruned} \\) -prune -o -type f -newerct @{since} "
-        f"-size -{MAX_SYNCED_FILE_KB}k -print0 "
-        f"| tar --null -T - -cf - | head -c {MAX_SYNC_BYTES}"
+        f"-size -{MAX_SYNCED_FILE_KB}k -print0 | tar --null -T - -cf -"
     )
-    proc = subprocess.run(
+    with subprocess.Popen(
         [
             "docker",
             "exec",
@@ -93,12 +95,24 @@ def _sync_from_container(since: str) -> None:
             "-c",
             script,
         ],
-        capture_output=True,
-        timeout=120,
-        check=True,
-    )
-    with tarfile.open(fileobj=io.BytesIO(proc.stdout)) as archive:
-        archive.extractall(_testbed(), filter="data")
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    ) as proc:
+        timer = threading.Timer(SYNC_TIMEOUT, proc.kill)
+        timer.start()
+        total = 0
+        try:
+            # "r|" reads a plain stream: a compressed archive is refused.
+            with tarfile.open(fileobj=proc.stdout, mode="r|") as archive:
+                for member in archive:
+                    total += member.size
+                    if total > MAX_SYNC_BYTES:
+                        raise ValueError("container changes are too large")
+                    if member.isreg() and member.size <= max_file_bytes:
+                        archive.extract(member, _testbed(), filter="data")
+        finally:
+            timer.cancel()
+            proc.kill()
 
 
 def _exec_in_container(

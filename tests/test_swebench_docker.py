@@ -147,6 +147,41 @@ def test_symlink_from_container_cannot_read_host_files(
     assert not (container.testbed_path / "leak.txt").is_symlink()
 
 
+def test_hostile_tar_cannot_escape_the_local_copy(
+    container: SWEBenchContainer,
+) -> None:
+    """Code in the container can replace tar: the host must not trust it."""
+    fake_tar = (
+        "#!/usr/local/bin/python\n"
+        "import io, sys, tarfile\n"
+        "with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as out:\n"
+        "    link = tarfile.TarInfo('link')\n"
+        "    link.type, link.linkname = tarfile.SYMTYPE, '/etc/hosts'\n"
+        "    out.addfile(link)\n"
+        "    for name in ('ok.txt', '../outside.txt'):\n"
+        "        info = tarfile.TarInfo(name)\n"
+        "        info.size = 2\n"
+        "        out.addfile(info, io.BytesIO(b'x\\n'))\n"
+    )
+    assert container.testbed_path is not None
+    result = swe.run_command(
+        f"cat > /usr/local/bin/tar <<'EOF'\n{fake_tar}EOF\n"
+        "chmod +x /usr/local/bin/tar"
+    )
+    assert "Error" in result
+    assert (container.testbed_path / "ok.txt").is_file()
+    assert not (container.testbed_path / "link").is_symlink()
+    assert not (container.testbed_path.parent / "outside.txt").exists()
+
+
+def test_sync_size_limit_is_enforced_on_the_host(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(swe, "MAX_SYNC_BYTES", 10)
+    assert "too large" in swe.run_command("head -c 100 /dev/zero > big.bin")
+    assert "big.bin" not in swe.list_files()
+
+
 def test_only_reasonable_regular_files_reach_the_host(
     container: SWEBenchContainer,
 ) -> None:
