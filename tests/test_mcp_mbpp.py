@@ -22,6 +22,12 @@ def test_run_tests_direct() -> None:
     assert "Failed test 1" in fail["output"]
 
 
+def test_run_tests_provides_math_like_the_moulinette() -> None:
+    code = "def half(x):\n    return x / 2\n"
+    res = json.loads(run_tests(code, ["assert math.isclose(half(3), 1.5)"]))
+    assert res["success"] is True
+
+
 def test_mbpp_mcp_stdio_handshake() -> None:
     async def _check() -> None:
         root = Path(__file__).resolve().parent.parent

@@ -15,12 +15,15 @@ def run_tests(code: str, test_list: List[str]) -> str:
 
     Returns a JSON string with a 'success' boolean and an 'output' message.
     """
+    # Some tests use math.isclose: `dump` drops their `import math`, while
+    # the moulinette validates with it, right after the code.
     runner_script = (
         "import json, sys, traceback\n"
         "payload = json.loads(sys.stdin.read())\n"
         "ns = {}\n"
         "try:\n"
         "    exec(payload['code'], ns)\n"
+        "    exec('import math', ns)\n"
         "except Exception:\n"
         "    print(traceback.format_exc(), file=sys.stderr)\n"
         "    sys.exit(1)\n"
