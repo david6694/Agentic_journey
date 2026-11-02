@@ -107,11 +107,6 @@ def main(argv: list[str] | None = None) -> int:
             eval_script=task.eval_script,
         ) as container:
             container.configure_env()
-            tpath = container.testbed_path
-            if tpath is not None and str(tpath) not in (
-                config.allowed_directories
-            ):
-                config.allowed_directories.append(str(tpath))
 
             with McpClient(
                 "stdio",

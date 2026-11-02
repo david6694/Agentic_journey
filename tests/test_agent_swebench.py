@@ -149,3 +149,5 @@ def test_agent_swebench_end_to_end(
     assert "-    return a * b" in sol.solution
     assert "+    return a / b" in sol.solution
     assert sol.iterations == 2
+    # Writing to the local copy directly would never reach the patch.
+    assert str(fake_testbed) not in sol.system_prompt
