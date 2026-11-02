@@ -34,7 +34,8 @@ Thought: Both cases work, I submit.
 final_answer("def last(xs): return xs[-1] if xs else None")
 ```<end_code>"""
 
-MBPP_METHOD = """Test and submit in one turn when you can:
+MBPP_METHOD = """Keep the exact Signature name. Put your solution in `code`,
+test with `run_tests(code, test_list)`, and submit in one turn when you can:
 ```python
 import json
 code = '''def add(a, b):
@@ -45,7 +46,7 @@ if result["success"]:
     final_answer(code)
 ```<end_code>"""
 
-SWEBENCH_METHOD = """Fix the issue in the repository like a careful engineer:
+SWEBENCH_METHOD = """Fix the bug in the repository like a careful engineer:
 1. Locate the relevant code (search_code, list_files, read_file).
 2. Reproduce the bug before changing anything when possible.
 3. Fix the root cause with minimal edits (edit_file).

@@ -13,7 +13,7 @@ RESOURCE_HELPERS = (
     ("list_mcp_resources() -> str", "List the server resources."),
     ("read_mcp_resource(uri: str) -> str", "Read one resource."),
 )
-PROMPT_HELPERS = (
+TEMPLATE_HELPERS = (
     ("list_mcp_prompts() -> str", "List the server prompt templates."),
     ("get_mcp_prompt(name: str, arguments: dict | None = None) -> str",
      "Render one prompt template."),
@@ -96,6 +96,6 @@ def build_manual(
         for signature, description in RESOURCE_HELPERS:
             lines.extend([signature, f"    {description}"])
     if has_prompts:
-        for signature, description in PROMPT_HELPERS:
+        for signature, description in TEMPLATE_HELPERS:
             lines.extend([signature, f"    {description}"])
     return "\n".join(lines)
