@@ -14,7 +14,8 @@ import mcp_tools_swebench as swe
 
 IMAGE = "smith-test-testbed:local"
 DOCKERFILE = """FROM python:3.10-slim
-RUN mkdir /testbed && printf 'x = 1\\ny = 1\\n' > /testbed/app.py
+RUN mkdir /testbed \
+ && printf 'x = 1\\ny = 1\\ndef f():\\n    return x\\n' > /testbed/app.py
 """
 
 
@@ -91,6 +92,19 @@ def test_read_file_sees_run_tests_changes(
     monkeypatch.setenv("EVAL_SCRIPT", "printf 'z = 1\\n' > from_eval.py")
     assert "exit_code: 0" in swe.run_tests()
     assert "1: z = 1" in swe.read_file("from_eval.py")
+
+
+def test_tools_show_paths_usable_in_the_container(
+    container: SWEBenchContainer,
+) -> None:
+    path = swe.list_files()
+    assert path == "/testbed/app.py"
+    assert "x = 1" in swe.run_command(f"cat {path}")
+    assert swe.search_code("y = 1") == "/testbed/app.py:2 y = 1"
+    assert swe.search_function_or_class_definition_in_code("f") == (
+        "/testbed/app.py:3 def f():"
+    )
+    assert swe.find_references("y") == "/testbed/app.py:2 y = 1"
 
 
 def test_cleanup_removes_container_and_local_copy(image: str) -> None:

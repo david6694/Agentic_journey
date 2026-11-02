@@ -41,6 +41,13 @@ def _resolve_path(filepath: str) -> Path:
     return target
 
 
+def _shown_path(path: Path) -> str:
+    """Path to show the LLM: /testbed/... when a container is used."""
+    if _container_id():
+        return f"/testbed/{path.relative_to(_testbed()).as_posix()}"
+    return str(path.resolve())
+
+
 def _sync_to_container(target: Path) -> None:
     cid = _container_id()
     if not cid:
@@ -147,7 +154,7 @@ def list_files(directory: str = ".", pattern: str = "*") -> str:
         base = _resolve_path(directory)
         if not base.is_dir():
             return f"Error: Directory not found: {directory}"
-        matches = [str(p.resolve()) for p in _iter_files(base, pattern)]
+        matches = [_shown_path(p) for p in _iter_files(base, pattern)]
         return _truncate("\n".join(matches)) if matches else "No files found."
     except Exception as exc:
         return f"Error listing files in {directory}: {exc}"
@@ -172,7 +179,7 @@ def search_code(pattern: str, file_pattern: str = "*") -> str:
             continue
         for idx, line in enumerate(text.splitlines(), 1):
             if regex.search(line):
-                matches.append(f"{path.resolve()}:{idx} {line}")
+                matches.append(f"{_shown_path(path)}:{idx} {line}")
     return _truncate("\n".join(matches)) if matches else "No matches found."
 
 
@@ -204,7 +211,7 @@ def search_function_or_class_definition_in_code(name: str) -> str:
             pass
         for idx, line in enumerate(lines, 1):
             if idx in found_lines or fallback_re.search(line):
-                matches.append(f"{path.resolve()}:{idx} {line}")
+                matches.append(f"{_shown_path(path)}:{idx} {line}")
     return _truncate("\n".join(matches)) if matches else "No definition found."
 
 
@@ -230,7 +237,7 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
             continue
         for idx, content in enumerate(text.splitlines(), 1):
             if sym_re.search(content):
-                matches.append(f"{path.resolve()}:{idx} {content}")
+                matches.append(f"{_shown_path(path)}:{idx} {content}")
     return _truncate("\n".join(matches)) if matches else "No references found."
 
 
