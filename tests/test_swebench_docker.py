@@ -67,6 +67,32 @@ def test_edit_file_reaches_the_container(
     assert "x = 2" in swe.run_command("cat app.py")
 
 
+def test_read_file_sees_run_command_changes(
+    container: SWEBenchContainer,
+) -> None:
+    swe.run_command("sed -i 's/x = 1/x = 2/' app.py")
+    assert "1: x = 2" in swe.read_file("app.py")
+    swe.run_command("printf 'z = 1\\n' > new.py")
+    assert "1: z = 1" in swe.read_file("new.py")
+
+
+def test_edit_file_keeps_run_command_changes(
+    container: SWEBenchContainer,
+) -> None:
+    swe.run_command("printf 'z = 1\\n' >> app.py")
+    assert "Successfully" in swe.edit_file("app.py", "x = 1", "x = 2")
+    content = swe.run_command("cat app.py")
+    assert "x = 2" in content and "z = 1" in content
+
+
+def test_read_file_sees_run_tests_changes(
+    container: SWEBenchContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_SCRIPT", "printf 'z = 1\\n' > from_eval.py")
+    assert "exit_code: 0" in swe.run_tests()
+    assert "1: z = 1" in swe.read_file("from_eval.py")
+
+
 def test_cleanup_removes_container_and_local_copy(image: str) -> None:
     box = SWEBenchContainer(image, "demo__repo-2")
     box.start()

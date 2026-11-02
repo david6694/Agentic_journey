@@ -55,6 +55,18 @@ def _sync_to_container(target: Path) -> None:
     )
 
 
+def _sync_from_container() -> None:
+    # shortcut: files deleted in the container stay in the local copy, rare
+    # for a bug fix; compare with `git status` if an agent trips over it.
+    subprocess.run(
+        ["docker", "cp", f"{_container_id()}:/testbed/.", str(_testbed())],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+
+
 def _truncate(text: str) -> str:
     if len(text) <= MAX_OUTPUT_CHARS:
         return text
@@ -243,6 +255,7 @@ def run_tests() -> str:
                 text=True,
                 timeout=120,
             )
+            _sync_from_container()
         else:
             if eval_script:
                 cmd = ["bash", "-c", eval_script]
@@ -337,6 +350,7 @@ def run_command(command: str, workdir: str = "") -> str:
                 text=True,
                 timeout=60,
             )
+            _sync_from_container()
         else:
             proc = subprocess.run(
                 command,
