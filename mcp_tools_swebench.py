@@ -19,15 +19,40 @@ def _testbed() -> Path:
     return Path(os.environ.get("TESTBED_PATH", "/testbed")).resolve()
 
 
+def _container_id() -> str:
+    return os.environ.get("SWE_CONTAINER_ID", "").strip()
+
+
 def _resolve_path(filepath: str) -> Path:
     root = _testbed()
     p = Path(filepath)
-    target = (root / p).resolve() if not p.is_absolute() else p.resolve()
+    if p.is_absolute():
+        try:
+            rel_to_docker = p.relative_to("/testbed")
+            target = (root / rel_to_docker).resolve()
+        except ValueError:
+            target = p.resolve()
+    else:
+        target = (root / p).resolve()
     if target != root and root not in target.parents:
         raise ValueError(
             f"Access denied: {filepath} is outside TESTBED_PATH ({root})"
         )
     return target
+
+
+def _sync_to_container(target: Path) -> None:
+    cid = _container_id()
+    if not cid:
+        return
+    rel = target.relative_to(_testbed())
+    subprocess.run(
+        ["docker", "cp", str(target), f"{cid}:/testbed/{rel.as_posix()}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
 
 
 def _truncate(text: str) -> str:
@@ -97,6 +122,7 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
                     f"SyntaxError at line {syn.lineno}: {syn.msg}"
                 )
         target.write_text(updated, encoding="utf-8")
+        _sync_to_container(target)
         return f"Successfully updated {filepath}."
     except Exception as exc:
         return f"Error editing {filepath}: {exc}"
@@ -200,22 +226,37 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
 def run_tests() -> str:
     """Execute the evaluation script or test suite in TESTBED_PATH."""
     root = _testbed()
+    cid = _container_id()
     eval_script = os.environ.get("EVAL_SCRIPT", "")
     eval_file = root / ".smith_eval.sh"
-    if eval_script:
-        cmd = ["bash", "-c", eval_script]
-    elif eval_file.is_file():
-        cmd = ["bash", str(eval_file)]
-    else:
-        cmd = ["pytest", "-q"]
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        if cid:
+            script = eval_script or (
+                eval_file.read_text(encoding="utf-8")
+                if eval_file.is_file()
+                else "pytest -q"
+            )
+            proc = subprocess.run(
+                ["docker", "exec", "-i", "-w", "/testbed", cid, "bash"],
+                input=script,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        else:
+            if eval_script:
+                cmd = ["bash", "-c", eval_script]
+            elif eval_file.is_file():
+                cmd = ["bash", str(eval_file)]
+            else:
+                cmd = ["pytest", "-q"]
+            proc = subprocess.run(
+                cmd,
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
         out = (
             f"exit_code: {proc.returncode}\n"
             f"stdout:\n{proc.stdout}\n"
@@ -231,14 +272,33 @@ def run_tests() -> str:
 @mcp.tool()
 def get_patch() -> str:
     """Retrieve the unified git diff of all changes made to the repository."""
+    cid = _container_id()
     try:
-        proc = subprocess.run(
-            ["git", "-c", "core.fileMode=false", "diff"],
-            cwd=str(_testbed()),
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        if cid:
+            proc = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-w",
+                    "/testbed",
+                    cid,
+                    "git",
+                    "-c",
+                    "core.fileMode=false",
+                    "diff",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        else:
+            proc = subprocess.run(
+                ["git", "-c", "core.fileMode=false", "diff"],
+                cwd=str(_testbed()),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
         if proc.returncode != 0:
             return f"Error running git diff: {proc.stderr.strip()}"
         return proc.stdout
@@ -252,16 +312,40 @@ def run_command(command: str, workdir: str = "") -> str:
 
     Returns the command's stdout, stderr, and exit code.
     """
+    cid = _container_id()
     try:
         cwd = _resolve_path(workdir) if workdir else _testbed()
-        proc = subprocess.run(
-            command,
-            shell=True,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        if cid:
+            rel_cwd = cwd.relative_to(_testbed())
+            container_cwd = (
+                "/testbed"
+                if str(rel_cwd) == "."
+                else f"/testbed/{rel_cwd.as_posix()}"
+            )
+            proc = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-w",
+                    container_cwd,
+                    cid,
+                    "bash",
+                    "-c",
+                    command,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        else:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
         out = (
             f"exit_code: {proc.returncode}\n"
             f"stdout:\n{proc.stdout}\n"
