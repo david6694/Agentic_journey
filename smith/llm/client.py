@@ -11,15 +11,9 @@ from dotenv import load_dotenv
 
 from smith.models import StepMetrics
 
-
-def _default_config_path() -> Path:
-    cwd_cfg = Path.cwd() / "configs" / "providers.json"
-    if cwd_cfg.is_file():
-        return cwd_cfg
-    return Path(__file__).resolve().parents[2] / "configs" / "providers.json"
-
-
-DEFAULT_CONFIG_PATH = _default_config_path()
+DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2] / "configs" / "providers.json"
+)
 
 URL_TO_ENV: Dict[str, str] = {
     "openrouter.ai": "OPENROUTER_API_KEY",
@@ -101,7 +95,7 @@ class LLMClient:
         config_path: Optional[Path] = None,
     ) -> None:
         load_dotenv()
-        cfg = self._load_config(config_path or _default_config_path())
+        cfg = self._load_config(config_path or DEFAULT_CONFIG_PATH)
         default_prov = cfg.get("default_provider", "mistral")
         prov_map = cfg.get("providers", {})
 

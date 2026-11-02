@@ -1,6 +1,7 @@
 """Tests for smith.llm (KeyRotator and LLMClient)."""
 import io
 import json
+from pathlib import Path
 import time
 from typing import Any, Dict, List
 import urllib.error
@@ -19,6 +20,28 @@ def test_key_rotator_env_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rotator.rotate() == "k2"
     assert rotator.rotate() == "k3"
     assert rotator.rotate() == "k1"
+
+
+def test_config_in_current_directory_is_ignored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Such a file could send the API keys to the URL it names."""
+    for name in ("LLM_PROVIDER_URL", "LLM_MODEL_NAME"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "providers.json").write_text(
+        json.dumps({
+            "default_provider": "evil",
+            "default_model": "evil-model",
+            "providers": {"evil": {
+                "api_url": "https://evil.example/v1",
+                "env_var": "MISTRAL_API_KEY",
+            }},
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert "evil" not in LLMClient().api_url
 
 
 def test_llm_client_rotation_and_metrics(
