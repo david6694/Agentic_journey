@@ -1,0 +1,103 @@
+"""SWE-bench container and tools against a real Docker container."""
+from collections.abc import Iterator
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+import pytest
+
+from agent_swebench.docker_env import SWEBenchContainer
+import mcp_tools_swebench as swe
+
+IMAGE = "smith-test-testbed:local"
+DOCKERFILE = """FROM python:3.10-slim
+RUN mkdir /testbed && printf 'x = 1\\ny = 1\\n' > /testbed/app.py
+"""
+
+
+def _docker_available() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    info = subprocess.run(
+        ["docker", "info"], capture_output=True, timeout=10
+    )
+    return info.returncode == 0
+
+
+pytestmark = pytest.mark.skipif(
+    not _docker_available(), reason="needs a running Docker daemon"
+)
+
+
+def _containers(name: str) -> str:
+    return subprocess.run(
+        ["docker", "ps", "-aq", "--filter", f"name={name}"],
+        capture_output=True, text=True, timeout=10,
+    ).stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def image() -> Iterator[str]:
+    subprocess.run(
+        ["docker", "build", "-q", "-t", IMAGE, "-"],
+        input=DOCKERFILE, capture_output=True, text=True,
+        timeout=300, check=True,
+    )
+    yield IMAGE
+    subprocess.run(["docker", "rmi", "-f", IMAGE], capture_output=True)
+
+
+@pytest.fixture
+def container(
+    image: str, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[SWEBenchContainer]:
+    monkeypatch.delenv("EVAL_SCRIPT", raising=False)
+    with SWEBenchContainer(image, "demo__repo-1") as box:
+        box.configure_env(monkeypatch.setenv)
+        yield box
+
+
+def test_edit_file_reaches_the_container(
+    container: SWEBenchContainer,
+) -> None:
+    assert "Successfully" in swe.edit_file("app.py", "x = 1", "x = 2")
+    assert "x = 2" in swe.run_command("cat app.py")
+
+
+def test_cleanup_removes_container_and_local_copy(image: str) -> None:
+    box = SWEBenchContainer(image, "demo__repo-2")
+    box.start()
+    local_copy = box.host_dir
+    assert local_copy is not None and local_copy.is_dir()
+    assert _containers(box.container_name)
+    box.cleanup()
+    assert not _containers(box.container_name)
+    assert not local_copy.exists()
+
+
+def test_kill_9_leaves_nothing_behind(image: str) -> None:
+    script = (
+        "import time\n"
+        "from agent_swebench.docker_env import SWEBenchContainer\n"
+        f"box = SWEBenchContainer({image!r}, 'demo__repo-3')\n"
+        "box.start()\n"
+        "print(box.container_name, box.host_dir, flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script], stdout=subprocess.PIPE, text=True
+    )
+    assert proc.stdout is not None
+    name, local_copy = proc.stdout.readline().split()
+    proc.send_signal(signal.SIGKILL)
+    proc.wait(timeout=5)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and (
+        _containers(name) or Path(local_copy).exists()
+    ):
+        time.sleep(0.2)
+    assert not _containers(name)
+    assert not Path(local_copy).exists()
