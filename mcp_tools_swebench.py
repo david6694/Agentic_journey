@@ -47,7 +47,7 @@ def _shown_path(path: Path) -> str:
     """Path to show the LLM: /testbed/... when a container is used."""
     if _container_id():
         return f"/testbed/{path.relative_to(_testbed()).as_posix()}"
-    return str(path.resolve())
+    return str(path)
 
 
 def _sync_to_container(target: Path) -> None:
@@ -118,10 +118,14 @@ def _truncate(text: str) -> str:
 
 def _iter_files(base: Path, file_pattern: str = "*") -> List[Path]:
     results: List[Path] = []
+    root = _testbed()
     for root_dir, dirs, files in os.walk(base):
         dirs[:] = sorted(d for d in dirs if d not in IGNORED_DIRS)
         for fname in sorted(files):
             full = Path(root_dir) / fname
+            # A symlink must not expose files outside the repository.
+            if not full.is_file() or root not in full.resolve().parents:
+                continue
             rel = str(full.relative_to(base))
             if fnmatch.fnmatch(fname, file_pattern) or fnmatch.fnmatch(
                 rel, file_pattern

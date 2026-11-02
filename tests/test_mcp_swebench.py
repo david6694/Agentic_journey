@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -97,6 +98,25 @@ def test_swebench_tools_direct(tmp_path: Path, monkeypatch: object) -> None:
     cmd_out = swe.run_command("echo hello_swe")
     assert "exit_code: 0" in cmd_out
     assert "hello_swe" in cmd_out
+
+
+def test_tools_do_not_follow_symlinks_out_of_the_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "inside.txt").write_text("INSIDE\n", encoding="utf-8")
+    (repo / "link.txt").symlink_to(repo / "inside.txt")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP_SECRET\n", encoding="utf-8")
+    (repo / "leak.txt").symlink_to(secret)
+    monkeypatch.setenv("TESTBED_PATH", str(repo))
+    monkeypatch.delenv("SWE_CONTAINER_ID", raising=False)
+    assert swe.search_code("TOP_SECRET") == "No matches found."
+    assert swe.find_references("TOP_SECRET") == "No references found."
+    listed = swe.list_files()
+    assert "leak.txt" not in listed and "link.txt" in listed
+    assert "INSIDE" in swe.search_code("INSIDE")
 
 
 def test_swebench_mcp_stdio_handshake(tmp_path: Path) -> None:
