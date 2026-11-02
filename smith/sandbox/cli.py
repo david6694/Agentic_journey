@@ -7,6 +7,7 @@ Usage:
 import argparse
 import ast
 import codeop
+from itertools import takewhile
 import sys
 
 from smith.sandbox.config import SandboxConfigError, load_config
@@ -68,23 +69,31 @@ def read_entry() -> str | None:
 
 
 def _split_script(source: str) -> list[str]:
-    """Split a non-interactive script into top-level statements."""
-    lines = [
-        line for line in source.splitlines()
-        if line.strip() != EXIT_COMMAND
-    ]
-    cleaned = "\n".join(lines)
-    if not cleaned.strip():
-        return []
+    """Split a non-interactive script into top-level statements.
+
+    Stops at a top-level exit. An invalid script stays whole so that the
+    sandbox reports the error.
+    """
     try:
-        tree = ast.parse(cleaned)
-    except SyntaxError:
-        return [cleaned]
-    segments = [
-        ast.get_source_segment(cleaned, node) or ""
-        for node in tree.body
+        body = ast.parse(source).body
+    except (SyntaxError, ValueError):
+        return [source] if source.strip() else []
+    # A def's line number skips its decorators.
+    starts = sorted({
+        min([node.lineno] + [
+            decorator.lineno
+            for decorator in getattr(node, "decorator_list", [])
+        ])
+        for node in body
+    })
+    lines = source.splitlines()
+    entries = [
+        "\n".join(lines[start - 1:end - 1])
+        for start, end in zip(starts, starts[1:] + [len(lines) + 1])
     ]
-    return [seg for seg in segments if seg.strip()]
+    return list(takewhile(
+        lambda entry: entry.splitlines()[0].strip() != EXIT_COMMAND, entries
+    ))
 
 
 def _run_source(sandbox: Sandbox, source: str) -> None:
