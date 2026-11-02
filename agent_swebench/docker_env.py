@@ -191,9 +191,6 @@ class SWEBenchContainer:
                     f"{cp_res.stderr.strip()}"
                 )
             self.testbed_path = self.host_dir / "testbed"
-            if self.eval_script:
-                eval_file = self.testbed_path / ".smith_eval.sh"
-                eval_file.write_text(self.eval_script, encoding="utf-8")
         except Exception:
             self.cleanup()
             raise

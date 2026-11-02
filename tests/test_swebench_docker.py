@@ -68,6 +68,17 @@ def test_edit_file_reaches_the_container(
     assert "x = 2" in swe.run_command("cat app.py")
 
 
+def test_eval_script_stays_out_of_the_repository(
+    image: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with SWEBenchContainer(
+        image, "demo__repo-4", eval_script="echo EVAL_OK"
+    ) as box:
+        box.configure_env(monkeypatch.setenv)
+        assert swe.list_files() == "/testbed/app.py"
+        assert "EVAL_OK" in swe.run_tests()
+
+
 def test_read_file_sees_run_command_changes(
     container: SWEBenchContainer,
 ) -> None:

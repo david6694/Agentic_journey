@@ -316,24 +316,18 @@ def run_tests() -> str:
     root = _testbed()
     cid = _container_id()
     eval_script = os.environ.get("EVAL_SCRIPT", "")
-    eval_file = root / ".smith_eval.sh"
     try:
         if cid:
-            script = eval_script or (
-                eval_file.read_text(encoding="utf-8")
-                if eval_file.is_file()
-                else "pytest -q"
-            )
             proc = _exec_in_container(
-                ["bash", "-c", script], "/testbed", RUN_TESTS_TIMEOUT
+                ["bash", "-c", eval_script or "pytest -q"],
+                "/testbed",
+                RUN_TESTS_TIMEOUT,
             )
         else:
-            if eval_script:
-                cmd = ["bash", "-c", eval_script]
-            elif eval_file.is_file():
-                cmd = ["bash", str(eval_file)]
-            else:
-                cmd = ["pytest", "-q"]
+            cmd = ["bash", "-c", eval_script] if eval_script else [
+                "pytest",
+                "-q",
+            ]
             proc = subprocess.run(
                 cmd,
                 cwd=str(root),
