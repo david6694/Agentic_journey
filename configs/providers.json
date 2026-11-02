@@ -51,13 +51,6 @@
       "models": [
         "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
       ]
-    },
-    "vercel": {
-      "api_url": "https://ai-gateway.vercel.sh/v1",
-      "env_var": "VERCEL_API_KEY",
-      "models": [
-        "openai/gpt-4o-mini"
-      ]
     }
   }
 }

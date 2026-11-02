@@ -22,7 +22,6 @@ URL_TO_ENV: Dict[str, str] = {
     "api.mistral.ai": "MISTRAL_API_KEY",
     "generativelanguage.googleapis.com": "GEMINI_API_KEY",
     "api.together.xyz": "TOGETHER_API_KEY",
-    "ai-gateway.vercel.sh": "VERCEL_API_KEY",
 }
 
 
