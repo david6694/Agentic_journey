@@ -45,11 +45,13 @@ def test_final_answer_stops_execution(sandbox: Sandbox) -> None:
     assert result.output == ""
 
 
-def test_final_answer_not_swallowed(sandbox: Sandbox) -> None:
+def test_final_answer_recorded_even_if_caught(sandbox: Sandbox) -> None:
     result = sandbox.execute(
-        "try:\n    final_answer(42)\nexcept Exception:\n    pass")
+        "try:\n    final_answer(42)\nexcept Exception:\n    pass\n"
+        "print('after')")
     assert result.final_answer_called
     assert result.final_answer == "42"
+    assert result.output == "after\n"
 
 
 def test_error_traceback_points_to_line(sandbox: Sandbox) -> None:
