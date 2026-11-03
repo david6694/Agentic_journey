@@ -1,0 +1,31 @@
+Agent finished in 2.9s
+TIME_LIMIT: OK (4s <= 120s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 261
+Benchmark: mbpp
+Success claimed: True
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness: PASSED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 2 / 10 OK
+Input tokens: 1507 / 6000 OK
+Output tokens: 158 / 1500 OK
+Time: 2.6s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: PASSED
+Metrics: VALID
+Overall: PASSED
+RESULT: PASSED

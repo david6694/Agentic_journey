@@ -1,0 +1,31 @@
+Agent finished in 5.2s
+TIME_LIMIT: OK (6s <= 120s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 276
+Benchmark: mbpp
+Success claimed: True
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness: PASSED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 2 / 10 OK
+Input tokens: 1789 / 6000 OK
+Output tokens: 443 / 1500 OK
+Time: 4.8s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: PASSED
+Metrics: VALID
+Overall: PASSED
+RESULT: PASSED

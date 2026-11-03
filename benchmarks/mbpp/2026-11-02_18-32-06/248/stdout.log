@@ -1,0 +1,34 @@
+Agent finished in 11.3s
+TIME_LIMIT: OK (12s <= 120s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 248
+Benchmark: mbpp
+Success claimed: False
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness check detail: Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+NameError: name 'harmonic_sum' is not defined
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 1 / 10 OK
+Input tokens: 702 / 6000 OK
+Output tokens: 1500 / 1500 OK
+Time: 11.0s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED
+RESULT: FAILED (validation)

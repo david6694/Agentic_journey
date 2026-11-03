@@ -1,0 +1,31 @@
+Agent finished in 8.4s
+TIME_LIMIT: OK (9s <= 120s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 123
+Benchmark: mbpp
+Success claimed: True
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness: PASSED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 2 / 10 OK
+Input tokens: 1864 / 6000 OK
+Output tokens: 786 / 1500 OK
+Time: 8.1s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: PASSED
+Metrics: VALID
+Overall: PASSED
+RESULT: PASSED

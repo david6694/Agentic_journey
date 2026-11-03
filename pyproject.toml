@@ -31,5 +31,5 @@ packages = ["smith", "agent_mbpp", "agent_swebench"]
 testpaths = ["tests"]
 
 [tool.mypy]
-exclude = ["exams", "context", "evaluations", "moulinette"]
+exclude = ["exams", "context", "evaluations", "moulinette", "evaluations_agent_smith", "benchmarks"]
 
