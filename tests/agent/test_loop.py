@@ -124,6 +124,12 @@ def test_output_is_capped_per_turn_then_by_what_is_left(
     assert llm.max_tokens == [limits.max_turn_output_tokens, 390]
 
 
+def test_empty_answer_is_never_sent_back_empty(sandbox: Sandbox) -> None:
+    llm = FakeLLM(["", "```python\nfinal_answer('done')\n```"])
+    _run(llm, sandbox)
+    assert all(m["content"] for m in llm.calls[1])
+
+
 def test_time_before_the_loop_counts(sandbox: Sandbox) -> None:
     limits = AgentLimits.mbpp()
     llm = FakeLLM(["```python\nfinal_answer('never asked')\n```"])

@@ -155,7 +155,9 @@ def run_agent(
         if output.error:
             break
         feedback = "\n".join(p for p in (note, observation) if p)
-        messages += [{"role": "assistant", "content": metrics.llm_output},
+        # Providers such as Cohere reject an empty assistant message.
+        answer = metrics.llm_output or "(empty answer)"
+        messages += [{"role": "assistant", "content": answer},
                      {"role": "user", "content": f"Observation:\n{feedback}"}]
     else:
         output.error = (f"no final_answer within {limits.max_iterations} "
