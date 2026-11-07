@@ -1,0 +1,33 @@
+Agent finished in 19.3s
+TIME_LIMIT: OK (20s <= 900s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: django__django-11066
+Benchmark: swebench
+Success claimed: False
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Solution doesn't look like a git patch
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 2 / 30 OK
+Input tokens: 3694 / 300000 OK
+Output tokens: 57 / 10000 OK
+Time: 17.8s / 900.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED
+RESULT: FAILED (validation)
+CLEANUP: OK

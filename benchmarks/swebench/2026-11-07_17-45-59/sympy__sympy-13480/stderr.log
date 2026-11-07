@@ -1,0 +1,9 @@
+warning: `VIRTUAL_ENV=/Users/mbp-jeremycaballe/Local/42-projects/agent_smith/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[11/07/26 17:47:06] INFO     Processing request of type            server.py:733
+                             ListToolsRequest                                   
+[11/07/26 17:47:09] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+[11/07/26 17:47:13] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+[11/07/26 17:47:49] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    

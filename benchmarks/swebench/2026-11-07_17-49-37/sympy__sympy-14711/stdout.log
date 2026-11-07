@@ -1,0 +1,33 @@
+Agent finished in 71.2s
+TIME_LIMIT: OK (72s <= 900s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: sympy__sympy-14711
+Benchmark: swebench
+Success claimed: False
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Solution doesn't look like a git patch
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 4 / 30 OK
+Input tokens: 5629 / 300000 OK
+Output tokens: 199 / 10000 OK
+Time: 70.2s / 900.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED
+RESULT: FAILED (validation)
+CLEANUP: OK

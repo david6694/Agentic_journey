@@ -1,0 +1,34 @@
+Agent finished in 2.9s
+TIME_LIMIT: OK (4s <= 120s)
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 137
+Benchmark: mbpp
+Success claimed: True
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness check detail: Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+AssertionError
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 1 / 10 OK
+Input tokens: 815 / 6000 OK
+Output tokens: 95 / 1500 OK
+Time: 2.6s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED
+RESULT: FAILED (validation)
