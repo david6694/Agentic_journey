@@ -95,8 +95,10 @@ class LLMClient:
         temperature: float = 0.0,
         max_tokens: int = 1024,
         config_path: Optional[Path] = None,
+        fallback: Optional["LLMClient"] = None,
     ) -> None:
         load_dotenv()
+        self.fallback = fallback
         cfg = self._load_config(config_path or DEFAULT_CONFIG_PATH)
         default_prov = cfg.get("default_provider", "mistral")
         prov_map = cfg.get("providers", {})
@@ -168,6 +170,36 @@ class LLMClient:
             return parsed
 
     def generate(
+        self,
+        messages: List[Dict[str, str]],
+        step: int = 1,
+        stop: Optional[List[str]] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        timeout: Optional[float] = None,
+    ) -> StepMetrics:
+        """Call the LLM, then the fallback client if this one fails.
+
+        `timeout` caps the whole call in seconds, fallback included.
+        """
+        start = time.perf_counter()
+        try:
+            return self._generate_once(
+                messages, step, stop, max_tokens, temperature, timeout)
+        except LLMError as exc:
+            left = None if timeout is None else (
+                timeout - (time.perf_counter() - start))
+            if self.fallback is None or (left is not None and left <= 0):
+                raise
+            try:
+                return self.fallback.generate(
+                    messages, step, stop, max_tokens, temperature, left)
+            except LLMError as fallback_exc:
+                raise LLMError(
+                    f"{exc}; fallback {self.fallback.model_name} failed "
+                    f"too: {fallback_exc}") from fallback_exc
+
+    def _generate_once(
         self,
         messages: List[Dict[str, str]],
         step: int = 1,

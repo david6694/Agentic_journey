@@ -193,3 +193,49 @@ def test_rate_limited_call_waits_before_retrying(
         model_name="m", provider_url="https://api.groq.com/openai/v1")
     assert client.generate([{"role": "user", "content": "hi"}]).retries == 1
     assert waits == [pytest.approx(3.0, abs=0.1)]
+
+
+def test_fallback_answers_when_the_primary_provider_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "k1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "k2")
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda *a: None)
+
+    def fake_post(
+        self: LLMClient, payload: Dict[str, Any], api_key: str, timeout: float
+    ) -> Dict[str, Any]:
+        if "groq" in self.api_url:
+            raise _rate_limited("0")
+        return {"choices": [{"message": {"content": "from mistral"}}]}
+
+    monkeypatch.setattr(LLMClient, "_post_chat", fake_post)
+    backup = LLMClient(
+        model_name="codestral-latest",
+        provider_url="https://api.mistral.ai/v1")
+    client = LLMClient(
+        model_name="qwen", provider_url="https://api.groq.com/openai/v1",
+        max_retries=1, fallback=backup)
+    metrics = client.generate([{"role": "user", "content": "hi"}])
+    assert metrics.llm_output == "from mistral"
+    assert metrics.model_name == "codestral-latest"
+
+
+def test_failed_fallback_reports_both_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "k1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "k2")
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda *a: None)
+    monkeypatch.setattr(
+        LLMClient, "_post_chat",
+        lambda self, p, k, t: (_ for _ in ()).throw(RuntimeError("down")))
+    backup = LLMClient(
+        model_name="codestral-latest",
+        provider_url="https://api.mistral.ai/v1",
+        max_retries=0)
+    client = LLMClient(
+        model_name="qwen", provider_url="https://api.groq.com/openai/v1",
+        max_retries=0, fallback=backup)
+    with pytest.raises(LLMError, match="fallback codestral-latest failed"):
+        client.generate([{"role": "user", "content": "hi"}])
