@@ -226,7 +226,12 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
                     f"SyntaxError at line {syn.lineno}: {syn.msg}"
                 )
         target.write_text(updated, encoding="utf-8")
-        _sync_to_container(target)
+        try:
+            _sync_to_container(target)
+        except Exception:
+            # The local copy must keep matching the container.
+            target.write_text(content, encoding="utf-8")
+            raise
         return f"Successfully updated {filepath}."
     except Exception as exc:
         return f"Error editing {filepath}: {exc}"

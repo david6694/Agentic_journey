@@ -119,6 +119,20 @@ def test_tools_do_not_follow_symlinks_out_of_the_repo(
     assert "INSIDE" in swe.search_code("INSIDE")
 
 
+def test_failed_container_copy_leaves_the_file_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setenv("TESTBED_PATH", str(tmp_path))
+
+    def broken_copy(target: Path) -> None:
+        raise subprocess.TimeoutExpired("docker cp", 30)
+
+    monkeypatch.setattr(swe, "_sync_to_container", broken_copy)
+    assert swe.edit_file("app.py", "x = 1", "x = 2").startswith("Error")
+    assert (tmp_path / "app.py").read_text(encoding="utf-8") == "x = 1\n"
+
+
 def test_swebench_mcp_stdio_handshake(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
 
