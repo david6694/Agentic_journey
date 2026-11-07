@@ -300,10 +300,12 @@ class LLMClient:
         """
         if exc.code != 429:
             return 0.0
+        # Without Retry-After (Mistral sends none), wait for a per-minute
+        # window to free up: 4 retries of 10s cover a 2 requests/min quota.
         try:
-            wait = float(exc.headers.get("retry-after") or 0)
+            wait = float(exc.headers.get("retry-after", ""))
         except (TypeError, ValueError):
-            wait = 0.0
+            wait = MAX_RETRY_AFTER_SECONDS
         if deadline is not None:
             wait = min(wait, deadline - time.perf_counter())
         return max(0.0, min(wait, MAX_RETRY_AFTER_SECONDS))

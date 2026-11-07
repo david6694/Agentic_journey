@@ -147,11 +147,12 @@ def test_llm_client_respects_timeout(
     assert all(0 < t <= 0.5 for t in timeouts)
 
 
-def _rate_limited(retry_after: str) -> urllib.error.HTTPError:
+def _rate_limited(retry_after: str | None) -> urllib.error.HTTPError:
     return urllib.error.HTTPError(
         url="https://api.groq.com/openai/v1", code=429,
         msg="Too Many Requests",
-        hdrs={"retry-after": retry_after},  # type: ignore[arg-type]
+        hdrs={} if retry_after is None else {  # type: ignore[arg-type]
+            "retry-after": retry_after},
         fp=io.BytesIO(b"rate limit"),
     )
 
@@ -160,10 +161,11 @@ def _rate_limited(retry_after: str) -> urllib.error.HTTPError:
     ("7", None, 7.0),
     ("60", None, 10.0),
     ("7", 2.0, 2.0),
-    ("soon", None, 0.0),
+    ("soon", None, 10.0),
+    (None, None, 10.0),
 ])
 def test_retry_after_is_honoured_within_limits(
-    header: str, deadline_in: float | None, expected: float
+    header: str | None, deadline_in: float | None, expected: float
 ) -> None:
     deadline = (
         None if deadline_in is None else time.perf_counter() + deadline_in)
