@@ -309,6 +309,8 @@ def search_function_or_class_definition_in_code(name: str) -> str:
 def find_references(name: str, filepath: str = "", line: int = 0) -> str:
     """Find all usages of a symbol (function or class).
 
+    Searches `filepath` only when given, else every .py file. `line` is
+    accepted for the subject's signature but not used.
     Format: `/absolute/path_to_file.py:<line_number> <line_content>`
     """
     sym_re = re.compile(rf"\b{re.escape(name)}\b")
