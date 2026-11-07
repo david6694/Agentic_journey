@@ -23,6 +23,7 @@ uv run sandbox --mcp-stdio "python mcp_tools_mbpp.py" sandbox_template.json
 uv run sandbox --mcp-server <URL>                # MCP over HTTP
 uv run python -m agent_mbpp --task-file task.json --output solution.json \
     --model-name "model/name" --provider-url "https://provider.api/v1"
+# without --model-name: qwen/qwen3.8-27b (Groq), codestral-latest as fallback
 uv run python -m agent_swebench --task-file task.json --output solution.json \
     --model-name "model/name" --provider-url "https://provider.api/v1"
 uv run pytest tests

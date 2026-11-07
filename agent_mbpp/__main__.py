@@ -1,5 +1,6 @@
 """CLI entry point for the MBPP agent (`uv run python -m agent_mbpp`)."""
 import argparse
+import os
 from pathlib import Path
 import shlex
 import sys
@@ -61,6 +62,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+# Best MBPP model in BENCHMARK_REPORT.md. Groq's per-minute quota makes the
+# fallback, the default model of configs/providers.json, necessary.
+MBPP_MODEL = ("qwen/qwen3.8-27b", "https://api.groq.com/openai/v1")
+
+
+def build_llm(
+    model_name: str | None, provider_url: str | None
+) -> LLMClient:
+    """The model asked for, else MBPP_MODEL with a fallback client."""
+    if (model_name or provider_url or os.environ.get("LLM_MODEL_NAME")
+            or os.environ.get("LLM_PROVIDER_URL")):
+        return LLMClient(model_name=model_name, provider_url=provider_url)
+    return LLMClient(*MBPP_MODEL, fallback=LLMClient())
+
+
 def _write_output(path: Path, solution: SolutionOutput) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(solution.model_dump_json(indent=2), encoding="utf-8")
@@ -107,10 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_execution_time_seconds=10, mcp_call_timeout_seconds=15
             )
         )
-        llm = LLMClient(
-            model_name=args.model_name,
-            provider_url=args.provider_url,
-        )
+        llm = build_llm(args.model_name, args.provider_url)
         with McpClient(
             "stdio", stdio_cmd, call_timeout=config.mcp_call_timeout_seconds
         ) as mcp_client:

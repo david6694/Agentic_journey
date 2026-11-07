@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import pytest
 
-from agent_mbpp.__main__ import main
+from agent_mbpp.__main__ import build_llm, main
 from smith.llm.client import LLMClient
 from smith.models import MBPPTaskInput, SolutionOutput, StepMetrics
 
@@ -103,3 +103,19 @@ def test_agent_mbpp_end_to_end(
     assert "All 2 tests passed" in sol.steps[0].sandbox_output
     assert "run_tests" in sol.system_prompt
     assert "Limits per execution: 10s" in sol.system_prompt
+
+
+def test_default_model_is_qwen_with_a_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("LLM_MODEL_NAME", "LLM_PROVIDER_URL"):
+        monkeypatch.delenv(name, raising=False)
+    llm = build_llm(None, None)
+    assert llm.model_name == "qwen/qwen3.8-27b"
+    assert llm.fallback is not None and llm.fallback.fallback is None
+    assert "groq" not in llm.fallback.api_url
+
+
+def test_requested_model_has_no_fallback() -> None:
+    llm = build_llm("codestral-latest", "https://api.mistral.ai/v1")
+    assert llm.model_name == "codestral-latest" and llm.fallback is None
