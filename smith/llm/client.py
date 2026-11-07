@@ -15,6 +15,9 @@ DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "configs" / "providers.json"
 )
 
+# Longest wait honoured on a 429, so a fallback still has time to answer.
+MAX_RETRY_AFTER_SECONDS = 10.0
+
 URL_TO_ENV: Dict[str, str] = {
     "openrouter.ai": "OPENROUTER_API_KEY",
     "api.groq.com": "GROQ_API_KEY",
@@ -237,7 +240,8 @@ class LLMClient:
                 self.rotator.rotate()
                 if attempt < self.max_retries:
                     retries += 1
-                    self._sleep_backoff(attempt)
+                    self._sleep_backoff(
+                        attempt, self._retry_after(exc, deadline))
             except Exception as exc:
                 last_error = exc
                 self.rotator.rotate()
@@ -250,9 +254,27 @@ class LLMClient:
         )
 
     @staticmethod
-    def _sleep_backoff(attempt: int) -> None:
-        delay = min(4.0, 0.5 * (2 ** attempt))
-        time.sleep(delay)
+    def _sleep_backoff(attempt: int, wait: float = 0.0) -> None:
+        """Exponential backoff, or the provider's wait when longer."""
+        time.sleep(max(wait, min(4.0, 0.5 * (2 ** attempt))))
+
+    @staticmethod
+    def _retry_after(
+        exc: urllib.error.HTTPError, deadline: Optional[float]
+    ) -> float:
+        """Seconds a rate-limited provider asks to wait, within the budget.
+
+        The 4s backoff was too short for per-minute quotas such as Groq's.
+        """
+        if exc.code != 429:
+            return 0.0
+        try:
+            wait = float(exc.headers.get("retry-after") or 0)
+        except (TypeError, ValueError):
+            wait = 0.0
+        if deadline is not None:
+            wait = min(wait, deadline - time.perf_counter())
+        return max(0.0, min(wait, MAX_RETRY_AFTER_SECONDS))
 
     @staticmethod
     def _extract_content(data: Dict[str, Any]) -> str:

@@ -48,7 +48,7 @@ def test_llm_client_rotation_and_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "bad_key,good_key")
-    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda self, a: None)
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda *a: None)
 
     used_keys: List[str] = []
 
@@ -103,7 +103,7 @@ def test_llm_client_exhausted_retries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("GROQ_API_KEY", "k1,k2")
-    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda self, a: None)
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", lambda *a: None)
     monkeypatch.setattr(
         LLMClient,
         "_post_chat",
@@ -125,7 +125,7 @@ def test_llm_client_respects_timeout(
 ) -> None:
     monkeypatch.setenv("GROQ_API_KEY", "k1")
     monkeypatch.setattr(
-        LLMClient, "_sleep_backoff", lambda self, a: time.sleep(0.2)
+        LLMClient, "_sleep_backoff", lambda *a: time.sleep(0.2)
     )
     timeouts: List[float] = []
 
@@ -145,3 +145,51 @@ def test_llm_client_respects_timeout(
         client.generate([{"role": "user", "content": "hi"}], timeout=0.5)
     assert len(timeouts) <= 3
     assert all(0 < t <= 0.5 for t in timeouts)
+
+
+def _rate_limited(retry_after: str) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        url="https://api.groq.com/openai/v1", code=429,
+        msg="Too Many Requests",
+        hdrs={"retry-after": retry_after},  # type: ignore[arg-type]
+        fp=io.BytesIO(b"rate limit"),
+    )
+
+
+@pytest.mark.parametrize("header, deadline_in, expected", [
+    ("7", None, 7.0),
+    ("60", None, 10.0),
+    ("7", 2.0, 2.0),
+    ("soon", None, 0.0),
+])
+def test_retry_after_is_honoured_within_limits(
+    header: str, deadline_in: float | None, expected: float
+) -> None:
+    deadline = (
+        None if deadline_in is None else time.perf_counter() + deadline_in)
+    wait = LLMClient._retry_after(_rate_limited(header), deadline)
+    assert wait == pytest.approx(expected, abs=0.1)
+
+
+def test_rate_limited_call_waits_before_retrying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "k1")
+    waits: List[float] = []
+    monkeypatch.setattr(LLMClient, "_sleep_backoff", staticmethod(
+        lambda attempt, wait=0.0: waits.append(wait)))
+    calls = iter([_rate_limited("3"), None])
+
+    def fake_post(
+        self: LLMClient, payload: Dict[str, Any], api_key: str, timeout: float
+    ) -> Dict[str, Any]:
+        error = next(calls)
+        if error is not None:
+            raise error
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(LLMClient, "_post_chat", fake_post)
+    client = LLMClient(
+        model_name="m", provider_url="https://api.groq.com/openai/v1")
+    assert client.generate([{"role": "user", "content": "hi"}]).retries == 1
+    assert waits == [pytest.approx(3.0, abs=0.1)]
