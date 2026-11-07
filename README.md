@@ -29,6 +29,32 @@ uv run python -m agent_swebench --task-file task.json --output solution.json \
 uv run pytest tests
 ```
 
+## System architecture
+
+```
+moulinette ──task.json──▶ agent_mbpp / agent_swebench (CLI)
+                              │
+                              ▼
+           smith/agent/loop.py ◀──▶ smith/llm/client.py ──▶ LLM providers
+                              │
+                              ▼
+           smith/sandbox/ (worker process) ◀──MCP──▶ mcp_tools_*.py
+                                                      │ (SWE-bench)
+                                                      ▼
+                                              Docker container /testbed
+```
+
+- `smith/llm/`: OpenAI-compatible client. Several keys per provider
+  (comma-separated), rotated on errors; retries follow `Retry-After` on HTTP
+  429; an optional fallback client takes over when every retry fails.
+  Providers and default model: `configs/providers.json`.
+- `smith/agent/`: the loop, code extraction and prompts.
+- `smith/sandbox/`: secure execution, MCP client, generated tool manual and
+  the `uv run sandbox` REPL.
+- `agent_mbpp/`, `agent_swebench/`: thin CLIs that build the sandbox, the
+  MCP server and the LLM client, then write `solution.json`.
+- `mcp_tools_mbpp.py`, `mcp_tools_swebench.py`: our MCP servers (stdio).
+
 ## Agent loop
 
 `smith/agent/loop.py` repeats Thought → Code → Observation:
@@ -67,6 +93,58 @@ Agent (parent)                              Worker (child)
 Known limit: `"{0.__class__}".format(x)` can read attributes as text (no
 call possible).
 
+## Tool implementation details
+
+Tools are served over MCP and discovered at runtime: their schemas become
+Python stubs in the sandbox and are listed in the manual given to the LLM.
+
+**MBPP** (`mcp_tools_mbpp.py`): `run_tests(code, test_list)` runs the code
+and the assertions in a fresh `python -I` process (10s timeout), with
+`import math` available like in the moulinette, and returns JSON
+`{"success", "output"}`.
+
+**SWE-bench** (`mcp_tools_swebench.py`): the 9 mandatory tools.
+`read_file`, `edit_file` (rejects edits that break Python syntax),
+`list_files`, `search_code`, `search_function_or_class_definition_in_code`
+(AST-based) and `find_references` work on a local copy of `/testbed`;
+`run_command`, `run_tests` and `get_patch`
+(`git -c core.fileMode=false diff`) run inside the task's container.
+
+- **Container lifecycle** (`agent_swebench/docker_env.py`): the image is
+  pulled for `linux/amd64`, `/testbed` is copied to the host, and the
+  container is removed on exit, on SIGINT/SIGTERM and, through a watchdog
+  process, even after `kill -9`.
+- **Synchronisation**: `edit_file` copies the file into the container (and
+  undoes the local edit if that fails); after each container command, the
+  files it changed are copied back. The container runs untrusted code, so
+  only regular files within size limits are accepted, checked on the host.
+- **What the LLM sees**: paths are shown as `/testbed/...`; `run_tests`
+  returns only the part between the SWE-bench test markers; commands are
+  stopped inside the container when they time out.
+- **Isolation mode**: without a container, every tool works on
+  `TESTBED_PATH`, as the moulinette's independent tool tests require.
+- If the agent never calls `final_answer`, the repository patch is still
+  submitted, with `success: false`.
+
+## Benchmark results and analysis
+
+Full report, with per-task tables, provider reliability, intermediary
+metrics and ablations: [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md).
+Backing `solution.json` files are in `benchmarks/`.
+
+- **SWE-bench** (3 tasks, `codestral-latest`): fixing the code-block
+  extraction and submitting the repository patch as a fallback raised the
+  result from 2/3 to 3/3.
+- **MBPP, same 20 tasks for every model**: `qwen/qwen3.8-27b` (Groq) 19/20,
+  `codestral-latest` (Mistral) 16/20, `openai/gpt-oss-120b` (Groq) 16/20.
+  qwen's only failure was a Groq rate limit (HTTP 429); `codestral-latest`
+  ran out of its input token budget on harder tasks.
+- **Choices**: MBPP uses `qwen/qwen3.8-27b` with `codestral-latest` as
+  fallback against Groq's quota; SWE-bench uses `codestral-latest`, whose
+  requests fit Mistral's free tier better.
+- **Free tiers** are the main operational risk: at about 2 requests a
+  minute per key on Mistral, several keys per provider are needed.
+
 ## Resources
 
 - [Model Context Protocol](https://modelcontextprotocol.io/)
@@ -76,6 +154,7 @@ call possible).
 - [SWE-bench](https://www.swebench.com/) and [MBPP](https://arxiv.org/abs/2108.07732)
 
 **AI usage**: Claude was used as a coding assistant to implement the
-sandbox, the agent loop and their tests, for security review, and to
-draft this README.
+sandbox, the agent loop and their tests, to review and harden the SWE-bench
+tools, for security review, to script the benchmark runs, and to draft this
+README.
 Generated code was tested before being kept.
