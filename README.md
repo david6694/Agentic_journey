@@ -135,6 +135,10 @@ Backing `solution.json` files are in `benchmarks/`.
 - **SWE-bench** (3 tasks, `codestral-latest`): fixing the code-block
   extraction and submitting the repository patch as a fallback raised the
   result from 2/3 to 3/3.
+- **SWE-bench, 6 models on the same 3 tasks**: `codestral-latest` and
+  `ministral-8b-latest` 3/3 (the latter with 2.5x more tokens),
+  `mistral-code-latest` and `qwen/qwen3.8-27b` 2/3, `openai/gpt-oss-120b` and
+  `cohere/north-mini-code:free` 1/3; most failures are free-tier rate limits.
 - **MBPP, same 20 tasks for every model**: `qwen/qwen3.8-27b` (Groq) 19/20,
   `codestral-latest` (Mistral) 16/20, `openai/gpt-oss-120b` (Groq) 16/20.
   qwen's only failure was a Groq rate limit (HTTP 429); `codestral-latest`
