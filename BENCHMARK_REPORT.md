@@ -91,7 +91,7 @@ Model: **`codestral-latest`** (`https://api.mistral.ai/v1`)
 | `openai/gpt-oss-120b` (groq) | 1/3 | 25 | 15 | 11.6 | 10/25 answered (40%), 2 task(s) aborted |
 | `cohere/north-mini-code:free` (openrouter) | 1/3 | 48 | 0 | 2.2 | 48/48 answered (100%), 0 task(s) aborted |
 
-- **Mistral** answers fast, but its free tier now allows **2 requests and 40,000 tokens per minute per key**, without `Retry-After`: about a third of the requests were retried, and `mistral-code-latest` lost `sympy-13480` after four 429s in a row.
+- **Mistral** answers fast, but its free tier allows **2 requests and 40,000 tokens per minute per key**, without `Retry-After`: about a third of the requests were retried, and `mistral-code-latest` lost `sympy-13480` after four 429s in a row. Retries therefore depend on the quota left when a run starts: `codestral-latest` needed none in section 2.1 and 11 here, on the same tasks, with the same result (3/3).
 - **Groq** has the strictest per-minute token quotas for SWE-bench sized prompts (10k–30k tokens): more than half of the requests were retried, and `qwen/qwen3.8-27b` lost `scikit-learn-13439` on a 429 after 9 iterations. `openai/gpt-oss-120b` also hit HTTP 400 `tool_use_failed`: it sometimes answers with a native tool call that Groq rejects, since we send none.
 - **OpenRouter** (`cohere/north-mini-code:free`) never rate-limited, but the model is unreliable for this agent: on `django-11066` its hidden reasoning used the whole 10,000-token output budget in 3 turns, and on `scikit-learn-13439` it answered `...` or nothing until the 30-iteration limit. Its only success, `sympy-13480`, comes from the repository-patch fallback (`2719f24`): the edit was made at step 13, then the output budget ran out before `final_answer`.
 
