@@ -5,6 +5,7 @@ calling styles (XML, JSON, ReAct) are converted to equivalent Python
 calls, so the sandbox only ever receives Python.
 """
 
+import ast
 import json
 import re
 from typing import Any
@@ -22,6 +23,9 @@ FENCED_BLOCK = re.compile(
     r"```([\w+-]*)[ \t]*\n(.*?)"
     r"(^```[ \t]*(?:<end_code>)?[ \t]*$|```(?:<end_code>)?\s*\Z|\Z)",
     re.DOTALL | re.MULTILINE)
+# Older rule, any fence closes the block: kept for answers such as
+# "...)\n```Thought: ...", when the strict rule gives code that cannot compile.
+LOOSE_FENCED_BLOCK = re.compile(r"```([\w+-]*)[ \t]*\n(.*?)(```|$)", re.DOTALL)
 PYTHON_TAGS = ("", "python", "py", "python3")
 XML_INVOKE = re.compile(r'<invoke name="([^"]+)">(.*?)</invoke>', re.DOTALL)
 XML_PARAMETER = re.compile(
@@ -41,8 +45,26 @@ def _python_call(name: str, args: dict[str, Any]) -> str | None:
     return f"result = {name}({params})\nprint(result)"
 
 
+def _compiles(code: str) -> bool:
+    try:
+        ast.parse(code)
+    except (SyntaxError, ValueError):
+        return False
+    return True
+
+
 def _from_python_blocks(text: str) -> tuple[str | None, str | None]:
-    blocks = [(body, end) for tag, body, end in FENCED_BLOCK.findall(text)
+    strict = _python_blocks(FENCED_BLOCK, text)
+    if strict[0] is None or _compiles(strict[0]):
+        return strict
+    loose = _python_blocks(LOOSE_FENCED_BLOCK, text)
+    return loose if loose[0] and _compiles(loose[0]) else strict
+
+
+def _python_blocks(
+    pattern: re.Pattern[str], text: str
+) -> tuple[str | None, str | None]:
+    blocks = [(body, end) for tag, body, end in pattern.findall(text)
               if tag.lower() in PYTHON_TAGS]
     code = "\n\n".join(body.strip() for body, _ in blocks if body.strip())
     if not code:

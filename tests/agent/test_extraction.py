@@ -79,3 +79,12 @@ def test_fence_inside_a_string_does_not_close_the_block() -> None:
 def test_closing_fence_right_after_the_code() -> None:
     code, note = extract_code("```python\nprint(1)```<end_code>")
     assert code == "print(1)" and note is None
+
+
+def test_fence_glued_to_the_next_thought_still_closes_the_block() -> None:
+    answer = (
+        'Thought: Fix.\n```python\nedit_file("a.py", "x", "y")\n'
+        '```Thought: Submit.\n```python\nfinal_answer(get_patch())\n```'
+    )
+    code, _ = extract_code(answer)
+    assert code == 'edit_file("a.py", "x", "y")\n\nfinal_answer(get_patch())'
