@@ -55,6 +55,63 @@ Model: **`codestral-latest`** (`https://api.mistral.ai/v1`)
 
 ---
 
+### 2.3 Multi-Model Comparison on the Same 3 Tasks (6 Models, 3 Providers)
+
+**Setup.** The same three tasks as above (`django__django-11066`, `scikit-learn__scikit-learn-13439`, `sympy__sympy-13480`), chosen because they span three repositories and three test runners (Django runner, pytest, SymPy's `bin/test`) while staying solvable in a few steps. Every model ran through the exam path: `agent_swebench` under `moulinette_eval run-agent 900`, then `moulinette_eval validate swebench`, with the code of branch `fix/mbpp-reliability` (2026-11-08, temperature 0, two Mistral keys rotated). Every `solution.json`: `benchmarks/swebench_models/`.
+
+| Model (provider) | Task | Result | Iterations | Input tokens | Output tokens | Wall-clock (s) | Stop reason |
+|---|---|---|---|---|---|---|---|
+| `codestral-latest` (mistral) | django-11066 | **PASS** | 8 | 21,947 | 312 | 111.1 | final_answer |
+| `codestral-latest` (mistral) | scikit-learn-13439 | **PASS** | 7 | 32,342 | 431 | 99.6 | final_answer |
+| `codestral-latest` (mistral) | sympy-13480 | **PASS** | 6 | 9,865 | 393 | 34.1 | final_answer |
+| `mistral-code-latest` (mistral) | django-11066 | **PASS** | 7 | 24,764 | 303 | 51.2 | final_answer |
+| `mistral-code-latest` (mistral) | scikit-learn-13439 | **PASS** | 5 | 8,869 | 163 | 96.3 | final_answer |
+| `mistral-code-latest` (mistral) | sympy-13480 | FAIL | 5 | 7,412 | 718 | 78.7 | HTTP 429 |
+| `ministral-8b-latest` (mistral) | django-11066 | **PASS** | 5 | 16,212 | 436 | 50.8 | final_answer |
+| `ministral-8b-latest` (mistral) | scikit-learn-13439 | **PASS** | 11 | 51,287 | 1,225 | 150.6 | final_answer |
+| `ministral-8b-latest` (mistral) | sympy-13480 | **PASS** | 26 | 94,803 | 2,015 | 316.0 | final_answer |
+| `qwen/qwen3.8-27b` (groq) | django-11066 | **PASS** | 4 | 13,195 | 141 | 73.2 | final_answer |
+| `qwen/qwen3.8-27b` (groq) | scikit-learn-13439 | FAIL | 9 | 27,784 | 278 | 216.6 | HTTP 429 |
+| `qwen/qwen3.8-27b` (groq) | sympy-13480 | **PASS** | 7 | 15,095 | 339 | 85.9 | final_answer |
+| `openai/gpt-oss-120b` (groq) | django-11066 | FAIL | 0 | 0 | 0 | 15.4 | HTTP 429 |
+| `openai/gpt-oss-120b` (groq) | scikit-learn-13439 | FAIL | 0 | 0 | 0 | 22.1 | HTTP 400 |
+| `openai/gpt-oss-120b` (groq) | sympy-13480 | **PASS** | 10 | 18,916 | 3,452 | 125.3 | final_answer |
+| `cohere/north-mini-code:free` (openrouter) | django-11066 | FAIL | 3 | 14,831 | 10,000 | 61.0 | output budget |
+| `cohere/north-mini-code:free` (openrouter) | scikit-learn-13439 | FAIL | 30 | 54,537 | 1,380 | 18.7 | 30 iterations |
+| `cohere/north-mini-code:free` (openrouter) | sympy-13480 | **PASS** | 15 | 76,748 | 9,996 | 53.1 | output budget |
+
+**Provider reliability.**
+
+| Model (provider) | Solved | Requests | Retries | Avg time per answered request, 429 waits included (s) | Availability |
+|---|---|---|---|---|---|
+| `codestral-latest` (mistral) | 3/3 | 32 | 11 | 8.5 | 21/32 answered (66%), 0 task(s) aborted |
+| `mistral-code-latest` (mistral) | 2/3 | 25 | 8 | 8.6 | 17/25 answered (68%), 1 task(s) aborted |
+| `ministral-8b-latest` (mistral) | 3/3 | 67 | 25 | 10.9 | 42/67 answered (63%), 0 task(s) aborted |
+| `qwen/qwen3.8-27b` (groq) | 2/3 | 46 | 26 | 14.0 | 20/46 answered (43%), 1 task(s) aborted |
+| `openai/gpt-oss-120b` (groq) | 1/3 | 25 | 15 | 11.6 | 10/25 answered (40%), 2 task(s) aborted |
+| `cohere/north-mini-code:free` (openrouter) | 1/3 | 48 | 0 | 2.2 | 48/48 answered (100%), 0 task(s) aborted |
+
+- **Mistral** answers fast, but its free tier now allows **2 requests and 40,000 tokens per minute per key**, without `Retry-After`: about a third of the requests were retried, and `mistral-code-latest` lost `sympy-13480` after four 429s in a row.
+- **Groq** has the strictest per-minute token quotas for SWE-bench sized prompts (10k–30k tokens): more than half of the requests were retried, and `qwen/qwen3.8-27b` lost `scikit-learn-13439` on a 429 after 9 iterations. `openai/gpt-oss-120b` also hit HTTP 400 `tool_use_failed`: it sometimes answers with a native tool call that Groq rejects, since we send none.
+- **OpenRouter** (`cohere/north-mini-code:free`) never rate-limited, but the model is unreliable for this agent: on `django-11066` its hidden reasoning used the whole 10,000-token output budget in 3 turns, and on `scikit-learn-13439` it answered `...` or nothing until the 30-iteration limit. Its only success, `sympy-13480`, comes from the repository-patch fallback (`2719f24`): the edit was made at step 13, then the output budget ran out before `final_answer`.
+
+**Intermediary metrics** (measured by hand from the `steps` of each `solution.json`; step of the first read of the file in the final patch / first edit of that file / first `run_tests` whose tests pass / `final_answer`):
+
+| Model | django-11066 | scikit-learn-13439 | sympy-13480 | Iterations between tests passing and `final_answer` |
+|---|---|---|---|---|
+| `codestral-latest` | 4 / 6 / 7 / 8 | 2 / 4 / 5 / 7 | 2 / 3 / 4 / 6 | 1, 2, 2 |
+| `mistral-code-latest` | 3 / 5 / 6 / 7 | 2 / 3 / 4 / 5 | — (429) | 1, 1 |
+| `ministral-8b-latest` | 2 / 3 / 4 / 5 | 2 / 8 / 10 / 11 | 1 / 5 / 24 / 26 | 1, 1, 2 |
+| `qwen/qwen3.8-27b` | 1 / 2 / 3 / 4 | — (429) | 1 / 2 / 6 / 7 | 1, 1 |
+| `openai/gpt-oss-120b` | — (429) | — (400) | 1 / 5 / 8 / 10 | 2 |
+| `cohere/north-mini-code:free` | — | — | 2 / 13 / — / — | — |
+
+- **Exploration efficiency:** `qwen/qwen3.8-27b` goes straight to the right file (step 1) and edits it at step 2; the Mistral code models need 2–4 steps; `ministral-8b-latest` finds the file early but needed 19 more steps to get `sympy-13480` right.
+- **Submission discipline:** every model submits 1–2 iterations after the tests pass. The extra iteration is the separate `get_patch()` call the models make before `final_answer`.
+- **Extraction regression found by this benchmark:** in the first run, `openai/gpt-oss-120b` glued a fence to the next `Thought` (`...)\n```Thought: ...`). The strict fence rule of `35e3167` did not close the block, the edit never ran, and an empty patch was submitted (`benchmarks/swebench_models/openai_gpt_oss_120b_before_f838bbb/`). Commit `f838bbb` falls back to the former rule when the strict one yields code that does not compile; the rerun above solved the task.
+
+**Conclusion for SWE-bench.** `codestral-latest` is the only model that solved the three tasks with no aborted call, in 6–8 iterations and with the fewest tokens among the 3/3 models; `ministral-8b-latest` also scored 3/3 but used 2.5x more input tokens (162k vs 64k) and up to 26 iterations. `qwen/qwen3.8-27b` is the fastest explorer but Groq's quotas make it unreliable at this prompt size. `codestral-latest` therefore stays the SWE-bench default.
+
 ## 3. Multi-Model & Multi-Provider Comparison (MBPP Suites)
 
 ### 3.1 MBPP Random-20 Suite (8 Models across 3 Providers)
@@ -190,7 +247,7 @@ We conducted **three controlled ablations** during development, each motivated b
 Based on **250+ recorded task executions** across SWE-bench Verified and MBPP (`benchmarks/`), we draw three engineering conclusions:
 
 1. **One default model per benchmark: `codestral-latest` for SWE-bench, `qwen/qwen3.8-27b` for MBPP, with `codestral-latest` as fallback:**
-   - **SWE-bench → `codestral-latest`** (`https://api.mistral.ai/v1`): **3/3 (100%)** in **8.0 iterations** per task with **0 retries** and **1.58s/turn**. It is the only model run on SWE-bench, and its large requests (10k–30k tokens per turn) would exceed Groq's free per-minute quotas.
+   - **SWE-bench → `codestral-latest`** (`https://api.mistral.ai/v1`): **3/3 (100%)** in **8.0 iterations** per task with **0 retries** and **1.58s/turn**. In the six-model comparison of section 2.3 it is the only model that solved the three tasks without an aborted call; Groq's free per-minute quotas cannot carry SWE-bench requests of 10k–30k tokens.
    - **MBPP → `qwen/qwen3.8-27b`** (`https://api.groq.com/openai/v1`): the highest accuracy on the same Random-20 tasks (**19/20** vs **16/20** for `codestral-latest`), every failure being an HTTP 429. Because `codestral-latest` is a non-reasoning code model it stays compact and reliable, so it is kept as the **fallback**: `smith/llm/client.py` follows `Retry-After` on HTTP 429 (`acdd788`, `b2261a2`) and hands the remaining time to the fallback when every retry fails (`0153e5d`, `5b2e12a`).
    - **Verification with this setup** (`benchmarks/mbpp/2026-11-07_*`): `exam_mbpp.sh` scored **4/5, 4/5, 4/5 and 5/5** (17/20, threshold reached in 4 runs out of 4), against 2 runs out of 4 with `codestral-latest` alone (`2026-11-02_18-55-06` .. `18-57-13`). The 3 failures were wrong answers, not rate limits, and the fallback was never needed.
    - **Free-tier limits** (`benchmarks/swebench/2026-11-07_*`): on 2026-11-07 Mistral's free tier allowed **2 requests and 40,000 tokens per minute per key**, without `Retry-After`. Three SWE-bench runs failed on HTTP 429 (`17-43-54`, `17-45-59`, `17-49-37`); with two Mistral keys rotated and a 10s wait per retry, the run `20-44-05` scored **3/3** (including `pydata__xarray-4629` and `sympy__sympy-14711`, 11 iterations, 154s).
