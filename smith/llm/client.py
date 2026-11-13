@@ -90,7 +90,7 @@ class LLMClient:
         model_name: Optional[str] = None,
         provider_url: Optional[str] = None,
         api_keys: Optional[Sequence[str]] = None,
-        max_retries: int = 4,
+        max_retries: Optional[int] = None,
         timeout_seconds: float = 60.0,
         temperature: float = 0.0,
         max_tokens: int = 1024,
@@ -117,7 +117,10 @@ class LLMClient:
         )
         env_var = self._resolve_env_var(self.api_url, prov_map)
         self.rotator = KeyRotator(env_var, explicit_keys=api_keys)
-        self.max_retries = max(0, max_retries)
+        default_retries = 4 if fallback is not None else 8
+        self.max_retries = max(
+            0, default_retries if max_retries is None else max_retries
+        )
         self.timeout_seconds = timeout_seconds
         self.temperature = temperature
         self.max_tokens = max_tokens

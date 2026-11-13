@@ -111,8 +111,9 @@ def test_default_model_is_qwen_with_a_fallback(
     for name in ("LLM_MODEL_NAME", "LLM_PROVIDER_URL"):
         monkeypatch.delenv(name, raising=False)
     llm = build_llm(None, None)
-    assert llm.model_name == "qwen/qwen3.8-27b"
+    assert llm.model_name == "qwen/qwen3.8-27b" and llm.max_retries == 4
     assert llm.fallback is not None and llm.fallback.fallback is None
+    assert llm.fallback.max_retries == 8
     assert "groq" not in llm.fallback.api_url
 
 
