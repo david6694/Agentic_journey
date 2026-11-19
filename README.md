@@ -4,7 +4,7 @@
 
 ## Description
 
-Agent Smith is an autonomous coding agent built from scratch. An LLM
+Agentique journey is an autonomous coding agent built from scratch. An LLM
 writes Python code, a secure sandbox runs it, and the result is fed back
 until the agent calls `final_answer`. It is evaluated on MBPP (small
 functions) and SWE-bench (fixing real GitHub issues), with tools served
